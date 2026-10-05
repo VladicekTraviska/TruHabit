@@ -1,0 +1,32 @@
+[package]
+name = "truhabit-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+truhabit-rules = { path = "../rules" }
+serde.workspace = true
+serde_json.workspace = true
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "process", "io-util"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-native-roots", "postgres", "migrate", "macros", "uuid", "chrono", "json"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+argon2 = "0.6"
+getrandom = "0.4"
+sha2 = "0.11"
+hex = "0.4"
+url = "2"
+base64 = "0.22"
+ed25519-dalek = "2"
+bs58 = "0.5"
+aes-gcm = "0.10"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls", "ring", "webpki-roots"] }
+tower-http = { version = "0.6", features = ["fs", "set-header", "limit"] }
+truhabit-evidence = { version = "0.1.0", path = "../evidence" }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

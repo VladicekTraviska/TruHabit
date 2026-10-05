@@ -1,0 +1,29 @@
+{
+  "name": "truhabit-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "node scripts/check-locales.mjs && tsc -b && vite build",
+    "check:locales": "node scripts/check-locales.mjs",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@solana/web3.js": "^1.98.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
+  },
+  "overrides": {
+    "uuid": "11.1.1",
+    "jayson": "5.0.0"
+  }
+}

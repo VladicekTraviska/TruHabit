@@ -1,0 +1,54 @@
+.activity-explanation,.challenge-next-step{font-size:14px;line-height:1.65;color:#223f31;min-width:0}
+.activity-explanation{container-type:inline-size;border:1px solid #dae4d9;border-radius:14px;background:#f8fbf7;padding:22px;margin:20px 0}
+.activity-explanation.tone-attention{border-color:#e5d8b9;background:#fffcf5;color:#5a4724}
+.activity-explanation.tone-success{border-color:#c5dec8;background:#f3faf3}
+.activity-explanation-title{display:flex;align-items:flex-start;gap:12px}
+.activity-explanation-title>svg,.activity-explanation-next>svg,.challenge-next-step>svg{flex-shrink:0;margin-top:2px}
+.activity-explanation-title>div,.activity-explanation-next>div,.challenge-next-step>div{min-width:0}
+.activity-explanation h4,.challenge-next-step h4{font-size:18px;line-height:1.4;letter-spacing:-.015em;margin:0 0 8px;font-weight:650;color:inherit}
+.activity-explanation p,.challenge-next-step p{font-size:14px;line-height:1.65;margin:0;color:inherit}
+.activity-explanation-stages{list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:0;margin:20px 0 24px}
+.activity-explanation-stage{display:flex;align-items:flex-start;gap:10px;padding:14px 12px;border:1px solid #dce5dc;background:#fff;border-radius:11px;min-width:0;color:#405946}
+.activity-explanation-stage-number{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;background:#edf3ed;color:#405946;font-size:14px;font-weight:650}
+.activity-explanation-stage strong{display:block;font-size:14px;line-height:1.45;font-weight:650;margin:2px 0 6px;color:inherit}
+.activity-explanation-stage p{font-size:14px;line-height:1.55;color:#54675a}
+.activity-explanation-stage.tone-success{border-color:#c6dec9;color:#215a31}
+.activity-explanation-stage.tone-success .activity-explanation-stage-number{background:#e5f2e5;color:#215a31}
+.activity-explanation-stage.tone-attention{border-color:#e5d8b9;color:#70501c}
+.activity-explanation-stage.tone-attention .activity-explanation-stage-number{background:#fbefd5;color:#70501c}
+.activity-explanation-comparison{width:100%;border-collapse:collapse;table-layout:fixed;color:#294535;background:#fff;border:1px solid #dce5dc;border-radius:11px;margin:0}
+.activity-explanation-comparison caption{text-align:left;font-size:14px;font-weight:650;margin-bottom:10px;color:inherit}
+.activity-explanation-comparison th,.activity-explanation-comparison td{text-align:left;vertical-align:top;padding:13px 14px;border-bottom:1px solid #e0e7dd;overflow-wrap:anywhere;font-size:14px;line-height:1.6}
+.activity-explanation-comparison th:first-child{width:22%}
+.activity-explanation-comparison thead th{background:#eef4ec;color:#45624c;font-weight:650}
+.activity-explanation-comparison tbody th{font-weight:650}
+.activity-explanation-comparison tbody tr:last-child>*{border-bottom:0}
+.activity-explanation-comparison td>span{display:block;margin-top:4px}
+.activity-explanation-comparison strong{font-weight:650}
+.activity-explanation-comparison .activity-comparison-result{display:flex;gap:6px;align-items:flex-start;margin-top:10px;font-size:14px;font-weight:600}
+.activity-comparison-result>svg{flex-shrink:0;margin-top:3px}
+.activity-comparison-result.result-pass{color:#245b32}
+.activity-comparison-result.result-attention{color:#805919}
+.activity-explanation .activity-explanation-timezone{font-size:14px;margin-top:10px;color:#617064}
+.activity-explanation-next{display:flex;align-items:flex-start;gap:12px;margin-top:20px;border-top:1px solid #e4dac3;padding-top:19px}
+.activity-explanation-next strong{display:block;font-size:15px;font-weight:650;margin-bottom:5px}
+.activity-explanation-next button{margin-top:14px;white-space:normal;text-align:left;min-height:46px}
+.activity-explanation-next .activity-explanation-button-note{margin-top:9px;font-size:14px;color:#63583f}
+.challenge-next-step{display:flex;gap:13px;align-items:flex-start;border:1px solid #cfdfcf;background:#eff6ed;border-radius:14px;padding:20px;margin:20px 0;color:#31553b}
+.challenge-next-step.tone-attention{background:#fff9ed;border-color:#e8dab9;color:#664b20}
+.challenge-next-step.tone-success{background:#f0f8ef;border-color:#c8dfc8;color:#285536}
+.challenge-next-step-label{display:block;font-size:11px;letter-spacing:.075em;font-weight:700;margin-bottom:7px;color:inherit}
+@container(max-width:650px){.activity-explanation-stages{grid-template-columns:1fr}.activity-explanation-stage{padding:14px}}
+@media(max-width:1100px){.activity-explanation-stages{grid-template-columns:1fr}.activity-explanation-stage{padding:14px}.activity-explanation-comparison th,.activity-explanation-comparison td{padding:11px 10px}}
+@media(max-width:760px){.activity-explanation{padding:17px 14px}.activity-explanation h4,.challenge-next-step h4{font-size:17px}.activity-explanation-title{gap:10px}.activity-explanation-comparison th,.activity-explanation-comparison td{padding:10px 7px;font-size:14px}.activity-explanation-comparison th:first-child{width:22%}.activity-explanation-comparison .activity-comparison-result{display:block;font-size:14px}.activity-comparison-result>svg{display:block;margin:0 0 3px}.activity-explanation-next{gap:9px}.challenge-next-step{padding:17px 14px;gap:10px}.activity-explanation-next button{width:100%;justify-content:space-between}.activity-explanation-next button>svg{flex-shrink:0}}
+@media(max-width:600px){
+  .activity-explanation-comparison thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .activity-explanation-comparison tbody,.activity-explanation-comparison tr,.activity-explanation-comparison td,.activity-explanation-comparison th[scope=row]{display:block;width:auto}
+  .activity-explanation-comparison tr{border-bottom:1px solid #dce5dc}
+  .activity-explanation-comparison tr:last-child{border-bottom:0}
+  .activity-explanation-comparison th[scope=row]{background:#eef4ec;padding:10px 12px;border:0}
+  .activity-explanation-comparison td{padding:10px 12px;border:0}
+  .activity-explanation-comparison td::before{content:attr(data-label);display:block;font-size:12px;font-weight:650;color:#526951;margin-bottom:5px}
+  .activity-explanation-comparison .activity-comparison-result{display:flex;margin-top:6px}
+  .activity-comparison-result>svg{display:inline;margin:3px 0 0}
+}

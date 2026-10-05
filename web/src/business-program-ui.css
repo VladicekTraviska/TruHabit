@@ -1,0 +1,45 @@
+.company-closure-status { margin:26px 0; padding:22px; border:1px solid var(--line); border-radius:12px; background:#f8faf8; }
+.company-closure-status.allowed { border-color:#bed8c7; background:#f0f7f2; }
+.company-closure-heading { display:flex; align-items:flex-start; gap:12px; }
+.company-closure-heading>svg { flex-shrink:0; color:#6d8b77; margin-top:2px; }
+.company-closure-status.allowed .company-closure-heading>svg { color:#397d55; }
+.company-closure-heading h4 { font-size:17px; margin:0 0 7px; font-weight:650; }
+.company-closure-heading p { color:var(--muted); font-size:12px; line-height:1.8; margin:0; max-width:70ch; }
+.company-closure-counts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:15px; margin:23px 0; padding:18px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.company-closure-counts>div { display:grid; gap:9px; min-width:0; }
+.company-closure-counts dt { color:var(--muted); font-size:10px; line-height:1.6; }
+.company-closure-counts dd { margin:0; font-size:20px; font-weight:600; color:var(--green); }
+.company-closure-next { display:grid; gap:6px; font-size:12px; color:var(--muted); line-height:1.8; margin:17px 0; max-width:75ch; }
+.company-closure-next>strong { font-size:11px; color:var(--green); font-weight:650; }
+.company-closure-deadline { display:flex; gap:9px; align-items:flex-start; font-size:11px; line-height:1.8; color:var(--green); }
+.company-closure-deadline>svg { flex-shrink:0; margin-top:3px; }
+.company-closure-deadline>span { display:grid; gap:5px; }
+.company-closure-deadline strong { font-weight:600; }
+.company-closure-deadline small { color:var(--muted); font-size:11px; line-height:1.7; }
+.company-closure-status .form-actions { margin-top:20px; }
+.company-closure-status .form-actions>.button:disabled { cursor:not-allowed; opacity:.55; }
+.company-closure-snapshot { margin:17px 0 0; font-size:10px; }
+.company-publish-validation { display:flex; gap:11px; border:1px solid #e0cdbd; background:#fff7f0; color:#80553b; border-radius:10px; padding:16px 18px; margin:0 0 22px; outline-offset:4px; }
+.company-publish-validation>svg { flex-shrink:0; margin-top:2px; }
+.company-publish-validation strong { font-size:12px; line-height:1.65; }
+.company-publish-validation ul { margin:9px 0 0; padding-left:18px; display:grid; gap:6px; }
+.company-publish-validation li { font-size:12px; line-height:1.8; }
+.company-publish-form [aria-invalid=true] { border-color:#b7835e; }
+.company-publish-budget-warning { color:#875f42; font-size:12px; line-height:1.8; margin:12px 0; }
+.company-funding-balance { display:flex; gap:14px; align-items:center; justify-content:space-between; flex-wrap:wrap; border:1px solid var(--line); border-radius:10px; background:var(--pale); padding:17px 18px; margin:0 0 23px; }
+.company-funding-balance>div { display:flex; align-items:center; gap:12px; }
+.company-funding-balance svg { color:#60826b; }
+.company-funding-balance span { display:grid; gap:8px; color:var(--muted); font-size:11px; }
+.company-funding-balance strong { color:var(--green); font-size:24px; font-weight:600; line-height:1.15; }
+.company-funding-balance>.button { font-size:11px; }
+.company-funding-balance>p { width:100%; color:var(--muted); font-size:10px; line-height:1.8; margin:0; }
+.company-publish-form>.company-funding-balance { margin-top:22px; }
+@media(max-width:620px) {
+  .company-closure-status { padding:18px; }
+  .company-closure-counts { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:18px; }
+  .company-closure-status .form-actions { align-items:stretch; }
+  .company-closure-status .form-actions>.button:first-child { width:100%; }
+  .company-publish-validation { padding:14px; }
+  .company-funding-balance { padding:15px; gap:12px; }
+  .company-funding-balance>.button { padding:6px 0; }
+}

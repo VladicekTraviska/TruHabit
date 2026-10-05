@@ -1,0 +1,16 @@
+[workspace]
+members = ["crates/rules", "crates/api", "crates/evidence"]
+exclude = ["contracts/prototype", "contracts/prototype-tests"]
+default-members = ["crates/api", "crates/rules", "crates/evidence"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+version = "0.1.0"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"

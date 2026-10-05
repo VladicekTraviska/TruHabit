@@ -1,0 +1,293 @@
+{
+  "address": "24nGy1KAx5GSFR2C6xaHnRgKMqYyoNq3LNfu3fFtvNRa",
+  "metadata": {
+    "name": "truhabit_prototype",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "deposit",
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "oracle",
+          "signer": true,
+          "address": "8m8eyZih5Mjakb8CH5Bxsi7BLp2gbderP6bKuJPm96n4"
+        },
+        {
+          "name": "mint",
+          "address": "BYa72dJf9S1sw4a4cmESd9DhinH8pQ6fy7gjbPm6VNp3"
+        },
+        {
+          "name": "commitment",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "Terms"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle",
+      "discriminator": [
+        175,
+        42,
+        185,
+        87,
+        144,
+        131,
+        102,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "address": "BYa72dJf9S1sw4a4cmESd9DhinH8pQ6fy7gjbPm6VNp3"
+        },
+        {
+          "name": "commitment",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "action",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Commitment",
+      "discriminator": [
+        61,
+        112,
+        129,
+        128,
+        24,
+        147,
+        77,
+        87
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidTerms",
+      "msg": "Invalid test-token terms"
+    },
+    {
+      "code": 6001,
+      "name": "OutsideWindow",
+      "msg": "Outside the agreed time window"
+    },
+    {
+      "code": 6002,
+      "name": "Unauthorized",
+      "msg": "Unauthorized actor or destination"
+    },
+    {
+      "code": 6003,
+      "name": "Terminal",
+      "msg": "Commitment already settled"
+    }
+  ],
+  "types": [
+    {
+      "name": "Commitment",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "starts",
+            "type": "i64"
+          },
+          {
+            "name": "ends",
+            "type": "i64"
+          },
+          {
+            "name": "upload",
+            "type": "i64"
+          },
+          {
+            "name": "refund",
+            "type": "i64"
+          },
+          {
+            "name": "terms_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Terms",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "starts",
+            "type": "i64"
+          },
+          {
+            "name": "ends",
+            "type": "i64"
+          },
+          {
+            "name": "upload",
+            "type": "i64"
+          },
+          {
+            "name": "refund",
+            "type": "i64"
+          },
+          {
+            "name": "terms_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

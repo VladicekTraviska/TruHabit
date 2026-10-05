@@ -1,0 +1,50 @@
+[
+  {
+    "name": "valid-run.gpx",
+    "description": "Synthetic 3.1 km / 18 min, no HR or cadence",
+    "sha256": "de3cb41a1094fafb01dcf6ae7e98d64d89be9a07f0794c7d5903dd9631df9a96",
+    "synthetic": true
+  },
+  {
+    "name": "short-run.gpx",
+    "description": "Synthetic 1 km / 10 min: insufficient for a 3 km goal",
+    "sha256": "e6059c1c61c5e9e865e87bf8d42878421874117a87781a22fc0cbdaecf5f7a42",
+    "synthetic": true
+  },
+  {
+    "name": "review-run.gpx",
+    "description": "Synthetic unusual speed: requires review, no claim of cheating",
+    "sha256": "221bdde9f26b26ec68a5410094ddfd7c4c83cf2dab1d7d4ff791fef70361166d",
+    "synthetic": true
+  },
+  {
+    "name": "sensor-mismatch.gpx",
+    "description": "Synthetic 3.104 km / 8 min 28 s at 22 km/h, HR 78 bpm and zero raw cadence: requires consistency review, no claim of cheating",
+    "sha256": "145e2b9bdadbf47fbcd632e588edf7dc6cf5565dee3e1bce0e5ba65531a076c1",
+    "synthetic": true
+  },
+  {
+    "name": "valid-run.fit",
+    "description": "Synthetic FIT running session, 3.1 km / 18 min, distance samples only",
+    "sha256": "ef8b364978b0e5dd61776a65e4ab7dabe7272b8db3cd21012c8793649e6ac2cb",
+    "synthetic": true
+  },
+  {
+    "name": "multi-session.fit",
+    "description": "Two running sessions: explicitly select 1 or 2",
+    "sha256": "8f88de9c1986495a5222d7fd99c79a9ed5f46ffc5d060cf8b9ce18bf39f310d9",
+    "synthetic": true
+  },
+  {
+    "name": "cycling.fit",
+    "description": "Synthetic cycling session must be rejected for a running challenge",
+    "sha256": "e3d5b44f803a0bca2237a310007a0171f673f8da9dc94569f083e9a9775aa478",
+    "synthetic": true
+  },
+  {
+    "name": "three-km-run.fit",
+    "description": "Synthetic acceptance case: exactly 3 km / 18 min, no HR or cadence",
+    "sha256": "44da6f996a6069cbf55aac3e771c1f6df66453466b8ab89e20f90e0dbce75614",
+    "synthetic": true
+  }
+]

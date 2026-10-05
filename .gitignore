@@ -1,0 +1,67 @@
+# Installed runtimes, private application state and backups (at any depth).
+.local/
+.tools/
+data/
+backups/
+output/
+
+# Build products and dependency caches.
+target/
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+*.pdb
+*.so
+*.exe
+*.dll
+
+# Private environment files and signing material.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*-keypair.json
+prototype-oracle.json
+prototype-mint.json
+prototype-program.json
+prototype-recipient.json
+prototype-tester.json
+*.dump
+*.dump.*
+*.sqlite
+*.sqlite3
+*.db
+
+# Only explicitly synthetic activity fixtures belong in source control.
+*.gpx
+*.fit
+!/web/public/prototype/valid-run.gpx
+!/web/public/prototype/short-run.gpx
+!/web/public/prototype/review-run.gpx
+!/web/public/prototype/sensor-mismatch.gpx
+!/web/public/prototype/valid-run.fit
+!/web/public/prototype/multi-session.fit
+!/web/public/prototype/cycling.fit
+!/web/public/prototype/three-km-run.fit
+
+# Historical/private working material is stored outside the source checkout.
+/audit/
+/archive/
+/tmp/
+/RUST_STUDIJNI_POZNAMKY.md
+.playwright-cli/
+playwright-report/
+test-results/
+
+# Machine/editor state.
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo

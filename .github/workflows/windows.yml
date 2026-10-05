@@ -1,0 +1,74 @@
+name: Source checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  application:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.14.0
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            prototype-chain/package-lock.json
+      - name: Install pinned Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed.' }
+      - name: Check API, rules, isolated PostgreSQL tests and frontend
+        shell: pwsh
+        run: ./scripts/verify.ps1
+      - name: Check transaction client and process console
+        shell: pwsh
+        run: |
+          npm.cmd --prefix prototype-chain ci --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'Chain dependencies failed.' }
+          npm.cmd --prefix prototype-chain test
+          if ($LASTEXITCODE -ne 0) { throw 'Chain tests failed.' }
+          node --test web/scripts/process.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Process console tests failed.' }
+
+  contract:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed.' }
+      - name: Check active program and compile its VM tests
+        shell: pwsh
+        run: |
+          foreach ($manifest in @('contracts/prototype/Cargo.toml', 'contracts/prototype-tests/Cargo.toml')) {
+            cargo fmt --manifest-path $manifest --all -- --check
+            if ($LASTEXITCODE -ne 0) { throw "Formatting failed: $manifest" }
+            cargo clippy --manifest-path $manifest --all-targets --locked -- -D warnings
+            if ($LASTEXITCODE -ne 0) { throw "Clippy failed: $manifest" }
+          }
+          # Execute against a fresh SBF binary separately with scripts/verify-contract.ps1.
+          # This requires installed cargo-build-sbf 4.4.0 and platform tools v1.57.
