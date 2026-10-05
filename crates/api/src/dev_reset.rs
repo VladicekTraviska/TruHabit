@@ -47,6 +47,7 @@ struct Counts {
     personal_challenges: i64,
     personal_activity_files: i64,
     local_credit_movements: i64,
+    company_point_movements: i64,
     owned_workspaces: i64,
     owned_programs: i64,
     owned_workspace_memberships: i64,
@@ -89,6 +90,7 @@ async fn lock_workspaces(tx: &mut Transaction<'_, Postgres>, user: Uuid) -> Resu
                    WHERE p.organization_id=o.id AND (p.funder_id=$1 OR e.user_id=$1))
          OR EXISTS(SELECT 1 FROM company_programs p JOIN prototype_local_movements m ON m.business_program_id=p.id
                    WHERE p.organization_id=o.id AND m.user_id=$1)
+         OR EXISTS(SELECT 1 FROM business_point_movements m WHERE m.organization_id=o.id AND (m.user_id=$1 OR m.actor_id=$1))
          ORDER BY o.id FOR UPDATE OF o",
     )
     .bind(user)
@@ -119,6 +121,7 @@ async fn snapshot(tx: &mut Transaction<'_, Postgres>, user: Uuid) -> Result<Snap
           'personal_uploads',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',u.id,'challenge_id',u.challenge_id,'file_hash',u.file_hash,'fingerprint',u.fingerprint,'session_index',u.session_index,'decision',u.decision,'goal_result',u.goal_result,'reason',u.reason,'received_at',u.received_at,'content_deleted_at',u.content_deleted_at,'has_content',u.content IS NOT NULL) ORDER BY u.id) FROM prototype_uploads u WHERE u.challenge_id IN(SELECT id FROM challenges)),'[]'),
           'reviews',COALESCE((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM prototype_review_requests r WHERE r.challenge_id IN(SELECT id FROM challenges)),'[]'),
           'movements',COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM prototype_local_movements m WHERE m.user_id=$1 OR m.business_program_id IN(SELECT id FROM programs)),'[]'),
+          'company_point_movements',COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM business_point_movements m WHERE m.user_id=$1 OR m.actor_id=$1 OR m.organization_id IN(SELECT id FROM owned)),'[]'),
           'workspaces',COALESCE((SELECT jsonb_agg(to_jsonb(o) ORDER BY o.id) FROM organizations o WHERE o.id IN(SELECT id FROM owned)),'[]'),
           'memberships',COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER BY m.organization_id,m.user_id) FROM organization_members m WHERE m.organization_id IN(SELECT id FROM owned) OR m.user_id=$1),'[]'),
           'invitations',COALESCE((SELECT jsonb_agg(to_jsonb(i)-'token_hash' ORDER BY i.id) FROM organization_invitations i WHERE i.organization_id IN(SELECT id FROM owned)),'[]'),
@@ -152,6 +155,8 @@ async fn snapshot(tx: &mut Transaction<'_, Postgres>, user: Uuid) -> Result<Snap
         personal_challenges: row.1,
         personal_activity_files: row.2,
         local_credit_movements: row.3,
+        company_point_movements: sqlx::query_scalar("SELECT count(*) FROM business_point_movements m LEFT JOIN organizations o ON o.id=m.organization_id WHERE m.user_id=$1 OR m.actor_id=$1 OR o.owner_id=$1")
+            .bind(user).fetch_one(&mut **tx).await?,
         owned_workspaces: row.4,
         owned_programs: row.5,
         owned_workspace_memberships: row.6,
@@ -202,6 +207,14 @@ async fn snapshot(tx: &mut Transaction<'_, Postgres>, user: Uuid) -> Result<Snap
         (
             "DEV_RESET_SHARED_FINANCIAL_HISTORY",
             "SELECT count(*) FROM company_programs p JOIN organizations o ON o.id=p.organization_id WHERE o.owner_id=$1 AND ((p.budget_units>0 AND (p.funder_id IS NULL OR p.funder_id<>$1)) OR EXISTS(SELECT 1 FROM prototype_local_movements m WHERE m.business_program_id=p.id AND m.user_id<>$1) OR EXISTS(SELECT 1 FROM company_enrollments e WHERE e.program_id=p.id AND e.user_id<>$1 AND e.assessment='MET'))",
+        ),
+        (
+            "DEV_RESET_FOREIGN_POINT_HISTORY",
+            "SELECT count(*) FROM business_point_movements m JOIN organizations o ON o.id=m.organization_id WHERE o.owner_id<>$1 AND (m.user_id=$1 OR m.actor_id=$1)",
+        ),
+        (
+            "DEV_RESET_SHARED_POINT_HISTORY",
+            "SELECT count(*) FROM business_point_movements m JOIN organizations o ON o.id=m.organization_id WHERE o.owner_id=$1 AND ((m.user_id IS NOT NULL AND m.user_id<>$1) OR (m.actor_id IS NOT NULL AND m.actor_id<>$1) OR (m.user_id IS NULL AND (m.employee_delta<>0 OR m.stake_delta<>0)))",
         ),
     ] {
         let count: i64 = sqlx::query_scalar(sql)
@@ -296,6 +309,7 @@ pub async fn reset(
     // Only personal book entries are erased. Shared or foreign entries were guarded
     // above, including ownership transfers where the current owner was not the funder.
     for sql in [
+        "DELETE FROM business_point_movements m USING organizations o WHERE m.organization_id=o.id AND o.owner_id=$1",
         "DELETE FROM prototype_local_movements WHERE user_id=$1",
         "DELETE FROM goals WHERE user_id=$1",
         "DELETE FROM prototype_challenges WHERE user_id=$1",

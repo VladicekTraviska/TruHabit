@@ -2260,7 +2260,7 @@ async fn prototype_concurrent_qualifying_uploads_reserve_one_run_without_settlem
             _ = tokio::time::sleep(std::time::Duration::from_millis(10)) => {}
         }
         let waiting: i64 = sqlx::query_scalar(
-            "SELECT count(*) FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock' AND query LIKE 'SELECT password_hash FROM users%FOR UPDATE'",
+            "SELECT count(*) FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock' AND query LIKE 'SELECT password_hash FROM users%FOR NO KEY UPDATE'",
         )
         .bind(&t.schema)
         .fetch_one(&t.admin)

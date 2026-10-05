@@ -52,7 +52,51 @@
 .workspace-archive-list { margin-top:24px; }
 .workspace-archive-list .workspace-options { margin-top:14px; }
 .business-error-focus:focus { outline:2px solid var(--green); outline-offset:4px; border-radius:12px; }
+.company-points-dashboard { margin:26px 0; padding:22px; border:1px solid #cfdfd5; border-radius:14px; background:#f8fbf8; }
+.company-points-dashboard .company-section-title { margin:0 0 20px; align-items:flex-start; }
+.company-points-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.company-points-metrics.manager { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.company-points-metrics>div { padding:16px; border:1px solid var(--line); background:white; border-radius:10px; display:flex; flex-direction:column; gap:9px; min-width:0; }
+.company-points-metrics span { font-size:11px; color:var(--muted); line-height:1.5; }
+.company-points-metrics strong { font-size:25px; color:var(--green); font-weight:650; overflow-wrap:anywhere; }
+.company-points-metrics small { font-size:11px; font-weight:500; }
+.company-points-metrics p { font-size:10px; line-height:1.6; color:var(--muted); margin:0; }
+.company-points-metrics .company-points-main { background:var(--green); border-color:var(--green); }
+.company-points-main :is(span,strong,p) { color:#fff; }
+.company-points-scope { display:flex; align-items:flex-start; gap:8px; font-size:11px; line-height:1.7; color:var(--muted); margin:17px 0 0; }
+.company-points-scope>svg { flex-shrink:0; margin-top:3px; }
+.company-pool-topup { margin:22px 0 0; padding-top:20px; border-top:1px solid var(--line); }
+.company-template-menu { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:22px 0; }
+.company-template-option { display:flex; flex-direction:column; gap:12px; text-align:left; padding:20px; background:#fff; border:1px solid var(--line); border-radius:12px; color:var(--ink); transition:background .15s,border-color .15s; }
+.company-template-option:hover { background:#f7faf7; border-color:#adc8b7; }
+.company-template-option.selected { border-color:var(--green); background:#edf5ee; box-shadow:inset 0 0 0 1px var(--green); }
+.company-template-option:focus-visible { outline:3px solid #70a98a; outline-offset:3px; }
+.company-template-top { display:flex; align-items:center; gap:10px; color:var(--green); }
+.company-template-top span { flex:1; font-size:10px; font-weight:600; }
+.company-template-option strong { font-size:17px; line-height:1.3; }
+.company-template-copy { font-size:12px; line-height:1.75; color:var(--muted); }
+.company-template-policy,.company-template-summary { padding:18px; font-size:12px; line-height:1.8; background:#f5f8f4; border:1px solid var(--line); border-left:3px solid var(--green); border-radius:9px; margin:18px 0; }
+.company-template-summary>strong { color:var(--green); font-size:16px; }
+.company-template-summary p { margin:10px 0 0; }
+.company-template-summary svg { vertical-align:middle; margin-right:5px; }
+.company-terms-consent { display:flex; align-items:flex-start; gap:11px; padding:16px; margin-top:20px; background:var(--pale); border:1px solid var(--line); border-radius:9px; font-size:12px; line-height:1.8; cursor:pointer; }
+.company-terms-consent input[type=checkbox] { width:19px; height:19px; min-width:19px; margin:2px 0; accent-color:var(--green); }
+.company-next-cycle { display:flex; gap:14px; padding:20px; margin:24px 0; border:1px solid var(--line); border-radius:12px; }
+.company-next-cycle>svg { color:var(--green); flex-shrink:0; margin-top:2px; }
+.company-next-cycle h4 { margin:0; font-size:16px; }
+.company-next-cycle p { font-size:12px; line-height:1.8; color:var(--muted); }
+.company-capabilities { margin:30px 0; }
+.company-capabilities-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; padding-top:20px; }
+.company-capabilities h3 { font-size:16px; }
+.company-capabilities p { color:var(--muted); font-size:12px; line-height:1.9; }
+.company-point-history { margin-top:20px; }
+.company-point-history li { display:flex; align-items:baseline; gap:12px; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line); font-size:12px; }
+.company-point-history ul { list-style:none; margin:0; padding:0; }
+.company-point-history time { display:block; font-size:10px; margin-top:5px; color:var(--muted); }
 @media(max-width:620px) {
+  .company-template-menu,.company-capabilities-grid,.company-points-metrics,.company-points-metrics.manager { grid-template-columns:minmax(0,1fr); }
+  .company-points-dashboard { padding:16px; }
+  .company-template-option { padding:17px; }
   .company-form-grid, .company-budget-summary { grid-template-columns:minmax(0,1fr); }
   .company-agreement { grid-template-columns:minmax(0,1fr); gap:6px; }
   .company-agreement dd { margin-bottom:12px; }

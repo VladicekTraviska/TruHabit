@@ -112,7 +112,9 @@ pub async fn rate_limit(
     Ok(())
 }
 pub async fn lock_user(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<String, ApiError> {
-    sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1 FOR UPDATE")
+    // Account IDs never change. Serialize mutations and deletion without blocking
+    // FK KEY SHARE checks when a company settles another employee's pledge.
+    sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1 FOR NO KEY UPDATE")
         .bind(id)
         .fetch_optional(&mut **tx)
         .await?
@@ -567,6 +569,19 @@ pub async fn delete_account(
     if active_business {
         return Err(ApiError::conflict("ACTIVE_BUSINESS_MUST_SETTLE"));
     }
+    // Serialize against corporate awards before checking that deletion cannot
+    // orphan earned points or a voluntary pledge belonging to this employee.
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT o.id FROM organizations o WHERE EXISTS(SELECT 1 FROM organization_members m WHERE m.organization_id=o.id AND m.user_id=$1) OR EXISTS(SELECT 1 FROM business_point_movements m WHERE m.organization_id=o.id AND m.user_id=$1) ORDER BY o.id FOR UPDATE OF o",
+    ).bind(auth.user.id).fetch_all(&mut *tx).await?;
+    let has_points: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM business_point_movements WHERE user_id=$1 GROUP BY organization_id HAVING sum(employee_delta)>0 OR sum(stake_delta)>0)",
+    ).bind(auth.user.id).fetch_one(&mut *tx).await?;
+    if has_points {
+        return Err(ApiError::conflict(
+            "Účet má získané nebo uzamčené firemní body. Smazání by odstranilo jejich vlastníka.",
+        ));
+    }
     sqlx::query("DELETE FROM users WHERE id=$1")
         .bind(auth.user.id)
         .execute(&mut *tx)
@@ -642,8 +657,11 @@ pub async fn export(
     let business_programs:Vec<serde_json::Value>=sqlx::query_scalar("SELECT to_jsonb(p)-'creation_hash' FROM company_programs p WHERE funder_id=$1 OR EXISTS(SELECT 1 FROM company_enrollments e WHERE e.program_id=p.id AND e.user_id=$1) ORDER BY created_at").bind(auth.user.id).fetch_all(&mut *tx).await?;
     let business_uploads:Vec<serde_json::Value>=sqlx::query_scalar("SELECT jsonb_build_object('id',id,'enrollment_id',enrollment_id,'goal_result',goal_result,'decision',decision,'reason',reason,'received_at',received_at,'format',activity->'format','distance_m',activity->'distance_m','starts_at',activity->'starts_at','ends_at',activity->'ends_at','source_authenticity',activity->'source_authenticity') FROM company_uploads WHERE user_id=$1 ORDER BY received_at").bind(auth.user.id).fetch_all(&mut *tx).await?;
     let business_events:Vec<serde_json::Value>=sqlx::query_scalar("SELECT to_jsonb(e)-'actor_id' FROM company_enrollment_events e JOIN company_enrollments n ON n.id=e.enrollment_id WHERE n.user_id=$1 ORDER BY e.id").bind(auth.user.id).fetch_all(&mut *tx).await?;
+    let business_point_movements: Vec<serde_json::Value> = sqlx::query_scalar(
+        "SELECT to_jsonb(m)-'request_hash' FROM business_point_movements m WHERE m.user_id=$1 OR m.actor_id=$1 ORDER BY created_at,id",
+    ).bind(auth.user.id).fetch_all(&mut *tx).await?;
     tx.commit().await?;
     Ok(Json(
-        serde_json::json!({"exported_at":Utc::now(),"account":account,"goals":goals,"events":events,"wallets":wallets,"security_events":security_events,"sessions":sessions,"organizations":organizations,"organization_events":organization_events,"prototype_challenges":prototype,"prototype_uploads":prototype_uploads,"prototype_events":prototype_events,"prototype_movements":prototype_movements,"prototype_commands":prototype_commands,"prototype_review_requests":prototype_review_requests,"business_enrollments":business_enrollments,"business_programs":business_programs,"business_uploads":business_uploads,"business_events":business_events}),
+        serde_json::json!({"exported_at":Utc::now(),"account":account,"goals":goals,"events":events,"wallets":wallets,"security_events":security_events,"sessions":sessions,"organizations":organizations,"organization_events":organization_events,"prototype_challenges":prototype,"prototype_uploads":prototype_uploads,"prototype_events":prototype_events,"prototype_movements":prototype_movements,"prototype_commands":prototype_commands,"prototype_review_requests":prototype_review_requests,"business_enrollments":business_enrollments,"business_programs":business_programs,"business_uploads":business_uploads,"business_events":business_events,"business_point_movements":business_point_movements}),
     ))
 }

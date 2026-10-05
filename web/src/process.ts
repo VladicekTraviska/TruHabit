@@ -29,8 +29,9 @@ export function beginApiTrace(path: string, method: string) {
   if (/(^|\/)source(?:\/|$)/.test(route)) return null;
   // Team activity and funding are LOCAL observations. Invitations, identity,
   // member emails, private-source routes and tokens are deliberately excluded.
-  const teamProgram = /^\/api\/organizations\/:id\/programs(?:\/:id(?:\/(?:publish|join|close|archive)|\/enrollments\/:id(?:\/(?:upload|claim|review))?)?)?$/.test(route);
-  if (!path.startsWith('/api/prototype/') && !teamProgram && route !== '/api/business/review') return null;
+  const teamProgram = /^\/api\/organizations\/:id\/programs(?:\/:id(?:\/(?:publish|join|close|archive|next-cycle)|\/enrollments\/:id(?:\/(?:upload|claim|review))?)?)?$/.test(route);
+  const companyPoints = /^\/api\/organizations\/:id\/points(?:\/top-up)?$/.test(route);
+  if (!path.startsWith('/api/prototype/') && !teamProgram && !companyPoints && route !== '/api/business/review') return null;
   const category = route.includes('/upload') ? 'evidence' : route === '/api/prototype/balance' || /\/(prepare|submit|refresh)$/.test(route) ? 'chain' : 'network';
   const started = performance.now();
   emitProcess({ category, level: 'info', en: `${method} ${route} · request started`, cs: `${method} ${route} · požadavek zahájen` });
@@ -44,6 +45,8 @@ const publicReasons = new Set([
   'INVALID_BUSINESS_TERMS', 'INVALID_BUSINESS_BUDGET', 'BUSINESS_VERSION_CHANGED',
   'BUSINESS_UPLOAD_WINDOW_OPEN', 'BUSINESS_ACCEPTED_REWARDS_MUST_BE_PAID', 'BUSINESS_REVIEW_PENDING',
   'CLOSE_BUSINESS_PROGRAM_FIRST', 'BUSINESS_HISTORY_MUST_BE_RETAINED', 'WORKSPACE_ARCHIVED',
+  'INSUFFICIENT_COMPANY_POINTS', 'INSUFFICIENT_EMPLOYEE_POINTS', 'BUSINESS_CONSENT_REQUIRED',
+  'BUSINESS_NEXT_CYCLE_EXISTS', 'BUSINESS_POINT_ID_CONFLICT',
 ]);
 export function finishApiTrace(trace: ReturnType<typeof beginApiTrace>, status: number, code?: string, reason?: string) {
   if (!trace || trace.epoch !== epoch) return;

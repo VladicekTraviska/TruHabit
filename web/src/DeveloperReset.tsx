@@ -7,7 +7,7 @@ import type { Session } from './types';
 import './developer-reset.css';
 
 type ResetCounts = {
-  goals: number; personal_challenges: number; personal_activity_files: number; local_credit_movements: number;
+  goals: number; personal_challenges: number; personal_activity_files: number; local_credit_movements: number; company_point_movements: number;
   owned_workspaces: number; owned_programs: number; owned_workspace_memberships: number; owned_team_activity_files: number;
   foreign_memberships: number; foreign_enrollments: number; foreign_activity_files: number;
 };
@@ -24,7 +24,7 @@ type ResetResult = {
 };
 type ResetError = { code: string; phase: 'preview' | 'reset' | 'refresh' };
 
-const countKeys: (keyof ResetCounts)[] = ['goals', 'personal_challenges', 'personal_activity_files', 'local_credit_movements', 'owned_workspaces', 'owned_programs', 'owned_workspace_memberships', 'owned_team_activity_files', 'foreign_memberships', 'foreign_enrollments', 'foreign_activity_files'];
+const countKeys: (keyof ResetCounts)[] = ['goals', 'personal_challenges', 'personal_activity_files', 'local_credit_movements', 'company_point_movements', 'owned_workspaces', 'owned_programs', 'owned_workspace_memberships', 'owned_team_activity_files', 'foreign_memberships', 'foreign_enrollments', 'foreign_activity_files'];
 const isCount = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 function isPreview(value: ResetPreview) {
   return value?.enabled === true && typeof value.allowed === 'boolean' && /^[a-f0-9]{64}$/i.test(value.fingerprint)
@@ -131,6 +131,7 @@ export function DeveloperReset({ session, disabled = false, onReset, onExpired, 
   }
   const countLabels: Record<keyof ResetCounts, string> = {
     goals: p('My plans', 'Moje plány'), personal_challenges: p('Personal challenges', 'Osobní výzvy'), personal_activity_files: p('Personal source files', 'Osobní zdrojové soubory'), local_credit_movements: p('LOCAL credit history', 'Historie LOCAL kreditů'),
+    company_point_movements: p('Company point history', 'Historie firemních bodů'),
     owned_workspaces: p('Workspaces I own', 'Prostory, které vlastním'), owned_programs: p('Programs in my workspaces', 'Programy v mých prostorech'), owned_workspace_memberships: p('Other members’ workspace memberships', 'Členství ostatních v mých prostorech'), owned_team_activity_files: p('Source files in my workspaces', 'Zdrojové soubory v mých prostorech'),
     foreign_memberships: p('My memberships elsewhere', 'Moje členství v jiných prostorech'), foreign_enrollments: p('My participation elsewhere', 'Moje účast v jiných prostorech'), foreign_activity_files: p('My source files elsewhere', 'Moje zdrojové soubory v jiných prostorech'),
   };
@@ -141,6 +142,8 @@ export function DeveloperReset({ session, disabled = false, onReset, onExpired, 
     DEV_RESET_FOREIGN_PARTICIPATION_ACTIVE: { title: p('Participation in another workspace is active', 'Účast v jiném prostoru je aktivní'), step: p('Complete or settle that participation with the workspace owner. A program must respect its upload deadline, reviews and earned rewards before closing.', 'Dokončete nebo vypořádejte účast s vlastníkem prostoru. Před uzavřením musí program dodržet termín nahrání, posouzení i získané odměny.'), href: '/?view=business', link: p('Open team programs', 'Otevřít týmové programy') },
     DEV_RESET_FOREIGN_FINANCIAL_HISTORY: { title: p('Shared reward history must be retained', 'Sdílenou historii odměn je nutné zachovat'), step: p('This profile has financial records with another workspace. They cannot be removed by this reset. Keep these records or use a separate development account.', 'Profil má finanční záznamy s jiným prostorem. Tento reset je nemůže odstranit. Zachovejte tyto záznamy nebo použijte samostatný vývojový účet.') },
     DEV_RESET_SHARED_FINANCIAL_HISTORY: { title: p('Other members have linked reward history', 'Ostatní členové mají navázanou historii odměn'), step: p('This reset cannot remove records that affect another member’s credit history. Keep the shared history or use a separate development account.', 'Reset nemůže odstranit záznamy, které ovlivňují historii kreditů jiného člena. Zachovejte sdílenou historii nebo použijte samostatný vývojový účet.') },
+    DEV_RESET_FOREIGN_POINT_HISTORY: { title: p('Company points belong to another workspace', 'Firemní body jsou navázané na jiný prostor'), step: p('Your corporate point history is shared with another workspace. Reset cannot erase its pool or your earned points. Use a separate test account for a fresh demonstration.', 'Historii firemních bodů sdílíte s jiným prostorem. Reset nemůže smazat jeho rozpočet ani vaše získané body. Pro čistou ukázku použijte samostatný testovací účet.') },
+    DEV_RESET_SHARED_POINT_HISTORY: { title: p('Other people have corporate point records', 'Ostatní lidé mají záznamy firemních bodů'), step: p('Reset cannot remove another employee’s points or pledge. Close and archive the programs to preserve their history.', 'Reset nemůže odstranit body ani garanci jiného zaměstnance. Uzavřete a archivujte programy, aby jejich historie zůstala zachovaná.') },
   };
   const errorText = (item: ResetError) => {
     const messages: Record<string, string> = {

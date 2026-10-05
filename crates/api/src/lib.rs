@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod business;
+pub mod business_points;
 pub mod config;
 pub mod crypto;
 pub mod dev_reset;
@@ -86,6 +87,9 @@ pub fn router(state: AppState, dist: impl AsRef<Path>) -> Router {
         .route("/api/organizations/{id}/archive",post(organizations::archive))
         .route("/api/organizations/{id}/restore",post(organizations::restore))
         .route("/api/organizations/{id}/programs",post(organizations::create_program))
+        .route("/api/organizations/{id}/points",get(business_points::balance))
+        .route("/api/organizations/{id}/points/top-up",post(business_points::top_up))
+        .route("/api/organizations/{org}/programs/{id}/next-cycle",post(business_points::next_cycle))
         .route("/api/organizations/{org}/programs/{id}",get(business::detail).patch(organizations::update_program))
         .route("/api/organizations/{org}/programs/{id}/archive",post(organizations::archive_program))
         .route("/api/organizations/{id}/invitations",post(business::invite))

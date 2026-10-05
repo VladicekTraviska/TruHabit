@@ -139,6 +139,24 @@ test('business error reasons must match exactly and never appear on successful r
   finishApiTrace(beginApiTrace('/api/organizations/:id/programs/:id/close', 'POST'), 409, 'BUSINESS_REVIEW_PENDING', 'BUSINESS_REVIEW_PENDING');
   assert.equal(getProcessSnapshot().at(-1).en.split('BUSINESS_REVIEW_PENDING').length, 2);
 });
+test('company point observations expose only routes and safe prerequisite identifiers', () => {
+  clearProcess();
+  const org = 'ec1c9b70-09c6-467c-95af-161c813fe024';
+  for (const path of [`/api/organizations/${org}/points`, `/api/organizations/${org}/points/top-up`, `/api/organizations/${org}/programs/${org}/next-cycle`]) {
+    const trace = beginApiTrace(path, 'POST');
+    assert.ok(trace);
+    finishApiTrace(trace, 400, 'INVALID_INPUT', 'INSUFFICIENT_COMPANY_POINTS');
+    const event = getProcessSnapshot().at(-1);
+    assert.equal(event.category, 'network');
+    assert.ok(event.en.includes('INSUFFICIENT_COMPANY_POINTS'));
+    assert.ok(!event.en.includes(org));
+  }
+  const trace = beginApiTrace(`/api/organizations/${org}/points/top-up`, 'POST');
+  finishApiTrace(trace, 409, 'CONFLICT', 'private employee balance: 500');
+  assert.ok(!getProcessSnapshot().at(-1).en.includes('500'));
+  clearProcess();
+});
+
 test('the process log is bounded, monotonic and clearable without persistence', () => {
   clearProcess();
   for (let i = 0; i < 250; i++) emitProcess({ category: 'app', level: 'info', en: 'x'.repeat(400), cs: 'y'.repeat(400) });

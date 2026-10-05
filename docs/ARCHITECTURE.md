@@ -1,6 +1,6 @@
 # Architecture
 
-TruHabit is a local web prototype for personal running commitments and employer-funded running rewards. LOCAL credits and Solana Devnet test tokens are separate modes; neither represents real money.
+TruHabit is a local web prototype for personal running commitments and employer-funded running rewards. Personal LOCAL credits, corporate benefit points and Solana Devnet test tokens use separate accounting; none represents real money.
 
 ## Components
 
@@ -35,7 +35,9 @@ The API persists a signed command before broadcast and reconciles it against fin
 
 ## Team programs
 
-B2B uses employer-funded **LOCAL test credits**. Joining reserves a potential reward; accepted results allow one reward claim. Participants do not stake their own funds and do not need Phantom.
+B2B uses a separate, explicitly simulated corporate point ledger scoped to each workspace. The owner issues test points into the company pool; publishing reserves the complete budget. Activity Points and Events pay a fixed reward. Employer Match locks an explicitly accepted pledge of the employee's already earned company points; success returns the pledge and awards the company bonus. Monthly Budget gradually reduces only an unearned prospective award. Accepted results trigger one atomic point award; private review must complete first when required. Participants do not need Phantom.
+
+Each point movement conserves the sum of company pool, reserved budget, employee balance, pledged balance and issuance offsets. Organization locks and unique movement constraints prevent overspending and repeated settlement. Existing LEGACY team programs continue to use the original LOCAL ledger and explicit reward claim. Corporate points never draw from a personal B2C balance or Solana vault.
 
 Published terms are fixed. Closing returns unused budget while protecting earned unpaid rewards and pending-review conditions. Archiving removes finished records from the active view while retaining history. Permanent deletion is limited to eligible workspaces without protected funded history. See [Business rules](BUSINESS.md).
 

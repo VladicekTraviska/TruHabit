@@ -624,6 +624,95 @@ async fn endpoint_is_unavailable_in_production_proxy_public_bind_and_remote_peer
     t.finish().await;
 }
 
+#[tokio::test]
+async fn own_company_points_reset_requires_a_fresh_preview_and_preserves_account() {
+    let t = TestApp::new().await;
+    let a = t.actor().await;
+    let org = t.org(a.id).await;
+    let path = format!("/api/organizations/{org}/points/top-up");
+    let first = t
+        .req(
+            "POST",
+            &path,
+            json!({"id":Uuid::new_v4(),"points":1000}),
+            &a,
+        )
+        .await;
+    assert_eq!(first.0, StatusCode::OK, "{}", first.1);
+    let preview = t.preview(&a).await;
+    assert_eq!(preview["allowed"], true);
+    assert_eq!(preview["counts"]["company_point_movements"], 1);
+    assert_eq!(
+        t.req("POST", &path, json!({"id":Uuid::new_v4(),"points":500}), &a)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        t.reset(&a, &preview).await.1["code"],
+        "DEV_RESET_PREVIEW_CHANGED"
+    );
+    let fresh = t.preview(&a).await;
+    assert_eq!(fresh["counts"]["company_point_movements"], 2);
+    assert_eq!(t.reset(&a, &fresh).await.0, StatusCode::OK);
+    let remaining: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM business_point_movements WHERE organization_id=$1",
+    )
+    .bind(org)
+    .fetch_one(&t.pool)
+    .await
+    .unwrap();
+    assert_eq!(remaining, 0);
+    assert_eq!(
+        t.req("GET", "/api/auth/session", Value::Null, &a).await.0,
+        StatusCode::OK
+    );
+    t.finish().await;
+}
+
+#[tokio::test]
+async fn transferred_company_point_pool_cannot_be_erased_by_either_profile_reset() {
+    let t = TestApp::new().await;
+    let a = t.actor().await;
+    let b = t.actor().await;
+    let org = t.org(a.id).await;
+    t.member(org, b.id).await;
+    let path = format!("/api/organizations/{org}/points/top-up");
+    assert_eq!(
+        t.req(
+            "POST",
+            &path,
+            json!({"id":Uuid::new_v4(),"points":1000}),
+            &a
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    // Ownership transfer preserves the corporate pool and its original issuer.
+    sqlx::query("UPDATE organizations SET owner_id=$2 WHERE id=$1")
+        .bind(org)
+        .bind(b.id)
+        .execute(&t.pool)
+        .await
+        .unwrap();
+    let old_owner = t.preview(&a).await;
+    let new_owner = t.preview(&b).await;
+    assert!(has_blocker(&old_owner, "DEV_RESET_FOREIGN_POINT_HISTORY"));
+    assert!(has_blocker(&new_owner, "DEV_RESET_SHARED_POINT_HISTORY"));
+    assert_eq!(t.reset(&a, &old_owner).await.1["code"], "DEV_RESET_BLOCKED");
+    assert_eq!(t.reset(&b, &new_owner).await.1["code"], "DEV_RESET_BLOCKED");
+    let pool: i64 = sqlx::query_scalar(
+        "SELECT sum(pool_delta)::bigint FROM business_point_movements WHERE organization_id=$1",
+    )
+    .bind(org)
+    .fetch_one(&t.pool)
+    .await
+    .unwrap();
+    assert_eq!(pool, 1000);
+    t.finish().await;
+}
+
 fn has_blocker(preview: &Value, code: &str) -> bool {
     preview["blockers"]
         .as_array()

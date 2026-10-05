@@ -173,4 +173,5 @@ export const messages: Record<string, string> = {
   'Požadavek v Phantomu byl odmítnut. Propojení se nezměnilo; můžete to zkusit znovu.': 'The Phantom request was declined. Your wallet link has not changed; you can retry.',
   'Phantom už má otevřený požadavek. Dokončete ho nebo zavřete a pak zkuste propojení znovu.': 'Phantom already has an open request. Finish or dismiss it, then retry linking.',
   'Phantom nevrátil použitelnou odpověď. Zkontrolujte rozšíření a zkuste propojení znovu.': 'Phantom did not return a usable response. Check the extension and retry linking.',
+  'Účet má získané nebo uzamčené firemní body. Smazání by odstranilo jejich vlastníka.': 'This account has earned or pledged company points. Deleting it would remove their owner.',
 };

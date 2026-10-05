@@ -1,9 +1,9 @@
-//! Manual company prototype: voluntary participation and LOCAL employer-funded rewards.
+//! Company prototype: voluntary participation and employer-funded points/legacy LOCAL rewards.
 //! Fiat planning fields never enter this ledger. Company roles never grant source/biometry access.
 use crate::{
     AppState,
     auth::{self, Auth},
-    crypto,
+    business_points, crypto,
     error::ApiError,
     organizations::{self, Organization, Program},
     prototype,
@@ -14,7 +14,7 @@ use axum::{
     http::HeaderMap,
     response::IntoResponse,
 };
-use chrono::{DateTime, Duration, Timelike, Utc};
+use chrono::{DateTime, Duration, SubsecRound, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{Acquire, FromRow, Postgres, Transaction};
@@ -30,6 +30,10 @@ pub struct Enrollment {
     pub reward_units: i64,
     pub created_at: DateTime<Utc>,
     pub paid_at: Option<DateTime<Utc>>,
+    pub staked_points: i64,
+    pub awarded_points: i64,
+    pub consented_at: Option<DateTime<Utc>>,
+    pub terms_version: Option<i32>,
 }
 async fn program(
     tx: &mut Transaction<'_, Postgres>,
@@ -385,6 +389,9 @@ pub async fn remove_member(
     if active {
         return Err(ApiError::conflict("ACTIVE_BUSINESS_ENROLLMENT"));
     }
+    if business_points::user_has_points(&mut tx, org, user).await? {
+        return Err(ApiError::conflict("EMPLOYEE_POINTS_MUST_REMAIN_ACCESSIBLE"));
+    }
     sqlx::query("DELETE FROM organization_members WHERE organization_id=$1 AND user_id=$2")
         .bind(org)
         .bind(user)
@@ -490,11 +497,21 @@ pub async fn detail(
     if p.published_at.is_none() && role == "MEMBER" {
         return Err(ApiError::not_found());
     }
-    let participants: Vec<Value> = if role != "MEMBER" {
+    let mut participants: Vec<Value> = if role != "MEMBER" {
         sqlx::query_scalar("SELECT to_jsonb(e)||jsonb_build_object('display_name',COALESCE(u.display_name,'Deleted account')) FROM company_enrollments e LEFT JOIN users u ON u.id=e.user_id WHERE program_id=$1 ORDER BY e.created_at LIMIT 10000").bind(id).fetch_all(&mut *tx).await?
     } else {
         vec![]
     };
+    if p.uses_points() {
+        let provisional = business_points::provisional(&p, Utc::now());
+        for participant in &mut participants {
+            participant["provisional_points"] = json!(if participant["state"] == "ENROLLED" {
+                provisional
+            } else {
+                0
+            });
+        }
+    }
     let own: Option<Enrollment> =
         sqlx::query_as("SELECT * FROM company_enrollments WHERE program_id=$1 AND user_id=$2")
             .bind(id)
@@ -505,7 +522,15 @@ pub async fn detail(
         .bind(org).bind(&role).fetch_one(&mut *tx).await?;
     let closure = closure(&mut tx, &p, !organization["archived_at"].is_null()).await?;
     tx.commit().await?;
-    let mut response = json!({"organization":organization,"program":p,"participants":participants,"current_user_enrollment":own,"participant_count":closure.participant_count,"is_operator":op,"role":role,"network":"LOCAL","real_money":false});
+    let own = own
+        .as_ref()
+        .map(|e| business_points::enrollment_json(&p, e, Utc::now()))
+        .transpose()?;
+    let mut response = json!({"organization":organization,"program":p,"participants":participants,"current_user_enrollment":own,"participant_count":closure.participant_count,"is_operator":op,"role":role,"network":"LOCAL","real_money":false,"server_now":Utc::now()});
+    if p.uses_points() {
+        response["unit"] = json!("POINTS");
+        response["simulation"] = json!(true);
+    }
     if role != "MEMBER" {
         response["closure"] = serde_json::to_value(closure).map_err(|_| ApiError::internal())?;
     }
@@ -563,6 +588,7 @@ async fn closure(
 #[serde(deny_unknown_fields)]
 pub struct Publish {
     version: i32,
+    #[serde(default)]
     reward_units: i64,
     profile: String,
     starts_at: DateTime<Utc>,
@@ -579,6 +605,18 @@ pub async fn publish(
 ) -> Result<Json<Program>, ApiError> {
     prototype::enabled(&state)?;
     auth.csrf(&headers)?;
+    let mut tx = state.pool.begin().await?;
+    auth::lock_user(&mut tx, auth.user.id).await?;
+    let access = organizations::access(&mut tx, auth.user.id, org, true).await?;
+    if access.role != "OWNER" {
+        return Err(ApiError::forbidden());
+    }
+    let p = program(&mut tx, org, id).await?;
+    let reward_units = if p.uses_points() {
+        p.point_reward * business_points::SCALE
+    } else {
+        input.reward_units
+    };
     let now = Utc::now();
     let (start, end, upload, review) = if input.profile == "REPLAY" {
         let start = now.with_nanosecond(0).ok_or_else(ApiError::internal)?;
@@ -590,35 +628,26 @@ pub async fn publish(
         )
     } else {
         (
-            input.starts_at,
-            input.ends_at,
-            input.upload_deadline,
-            input.review_deadline,
+            input.starts_at.trunc_subsecs(6),
+            input.ends_at.trunc_subsecs(6),
+            input.upload_deadline.trunc_subsecs(6),
+            input.review_deadline.trunc_subsecs(6),
         )
     };
-    if !(1_000_000..=50_000_000).contains(&input.reward_units)
+    if (!p.uses_points() && !(1_000_000..=50_000_000).contains(&reward_units))
         || !matches!(input.profile.as_str(), "LIVE" | "REPLAY")
         || end <= start
-        || end > start + Duration::days(30)
+        || end > start + Duration::days(if p.monthly_decline { 32 } else { 30 })
         || upload < end
         || upload > end + Duration::days(7)
         || review <= upload
         || review > upload + Duration::days(7)
-        || (input.profile == "LIVE"
-            && (start < now + Duration::minutes(5) || start > now + Duration::days(30)))
     {
         return Err(ApiError::bad("INVALID_BUSINESS_TERMS"));
     }
-    let mut tx = state.pool.begin().await?;
-    auth::lock_user(&mut tx, auth.user.id).await?;
-    let access = organizations::access(&mut tx, auth.user.id, org, true).await?;
-    if access.role != "OWNER" {
-        return Err(ApiError::forbidden());
-    }
-    let p = program(&mut tx, org, id).await?;
     if p.state == "PUBLISHED"
         && p.funder_id == Some(auth.user.id)
-        && p.reward_units == Some(input.reward_units)
+        && p.reward_units == Some(reward_units)
         && p.profile.as_deref() == Some(&input.profile)
         && (input.profile == "REPLAY"
             || (p.starts_at == Some(start)
@@ -628,22 +657,38 @@ pub async fn publish(
     {
         return Ok(Json(p));
     }
+    // An already funded publication can be retried after its start. The future
+    // start requirement only applies when publishing a new draft.
+    if input.profile == "LIVE"
+        && (start < now + Duration::minutes(5) || start > now + Duration::days(30))
+    {
+        return Err(ApiError::bad("INVALID_BUSINESS_TERMS"));
+    }
     if p.state != "DRAFT" || p.version != input.version {
         return Err(ApiError::conflict("BUSINESS_VERSION_CHANGED"));
     }
-    let budget = input
-        .reward_units
+    let budget = reward_units
         .checked_mul(i64::from(p.max_participants))
         .ok_or_else(|| ApiError::bad("INVALID_BUSINESS_BUDGET"))?;
-    if budget > 1_000_000_000 {
+    if budget
+        > if p.uses_points() {
+            10_000_000 * business_points::SCALE
+        } else {
+            1_000_000_000
+        }
+    {
         return Err(ApiError::bad("INVALID_BUSINESS_BUDGET"));
     }
-    let available:i64=sqlx::query_scalar("SELECT COALESCE(sum(wallet_delta),0)::bigint FROM prototype_local_movements WHERE user_id=$1").bind(auth.user.id).fetch_one(&mut *tx).await?;
-    if available < budget {
-        return Err(ApiError::bad("INSUFFICIENT_SIMULATION_CREDITS"));
+    if p.uses_points() {
+        business_points::fund(&mut tx, &p, auth.user.id, budget / business_points::SCALE).await?;
+    } else {
+        let available:i64=sqlx::query_scalar("SELECT COALESCE(sum(wallet_delta),0)::bigint FROM prototype_local_movements WHERE user_id=$1").bind(auth.user.id).fetch_one(&mut *tx).await?;
+        if available < budget {
+            return Err(ApiError::bad("INSUFFICIENT_SIMULATION_CREDITS"));
+        }
+        sqlx::query("INSERT INTO prototype_local_movements(id,user_id,action,wallet_delta,locked_delta,recipient_delta,issued_delta,business_program_id) VALUES($1,$2,'BUSINESS_FUND',$3,$4,0,0,$5)").bind(Uuid::new_v4()).bind(auth.user.id).bind(-budget).bind(budget).bind(id).execute(&mut *tx).await?;
     }
-    sqlx::query("INSERT INTO prototype_local_movements(id,user_id,action,wallet_delta,locked_delta,recipient_delta,issued_delta,business_program_id) VALUES($1,$2,'BUSINESS_FUND',$3,$4,0,0,$5)").bind(Uuid::new_v4()).bind(auth.user.id).bind(-budget).bind(budget).bind(id).execute(&mut *tx).await?;
-    let p=sqlx::query_as::<_,Program>("UPDATE company_programs SET state='PUBLISHED',version=version+1,updated_at=now(),reward_units=$1,budget_units=$2,funder_id=$3,profile=$4,starts_at=$5,ends_at=$6,upload_deadline=$7,review_deadline=$8,published_at=now() WHERE id=$9 RETURNING *").bind(input.reward_units).bind(budget).bind(auth.user.id).bind(input.profile).bind(start).bind(end).bind(upload).bind(review).bind(id).fetch_one(&mut *tx).await?;
+    let p=sqlx::query_as::<_,Program>("UPDATE company_programs SET state='PUBLISHED',version=version+1,updated_at=now(),reward_units=$1,budget_units=$2,funder_id=$3,profile=$4,starts_at=$5,ends_at=$6,upload_deadline=$7,review_deadline=$8,published_at=now() WHERE id=$9 RETURNING *").bind(reward_units).bind(budget).bind(auth.user.id).bind(input.profile).bind(start).bind(end).bind(upload).bind(review).bind(id).fetch_one(&mut *tx).await?;
     organizations::event(
         &mut tx,
         org,
@@ -659,6 +704,8 @@ pub async fn publish(
 #[serde(deny_unknown_fields)]
 pub struct Join {
     id: Uuid,
+    #[serde(default)]
+    accept_terms: bool,
 }
 pub async fn join(
     auth: Auth,
@@ -690,6 +737,9 @@ pub async fn join(
         return Ok(Json(old));
     }
     let now = Utc::now();
+    if matches!(p.template.as_str(), "EMPLOYER_MATCH" | "MONTHLY_BUDGET") && !input.accept_terms {
+        return Err(ApiError::bad("BUSINESS_EXPLICIT_CONSENT_REQUIRED"));
+    }
     if p.state != "PUBLISHED" || p.ends_at.is_none_or(|end| now >= end) {
         return Err(ApiError::conflict("BUSINESS_JOIN_CLOSED"));
     }
@@ -705,7 +755,10 @@ pub async fn join(
     if p.reserved_units + reward + p.paid_units + p.returned_units > p.budget_units {
         return Err(ApiError::conflict("BUSINESS_BUDGET_EXHAUSTED"));
     }
-    let saved=sqlx::query_as::<_,Enrollment>("INSERT INTO company_enrollments(id,program_id,user_id,reward_units) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING RETURNING *").bind(input.id).bind(id).bind(auth.user.id).bind(reward).fetch_optional(&mut *tx).await?.ok_or_else(||ApiError::conflict("BUSINESS_ID_CONFLICT"))?;
+    let saved=sqlx::query_as::<_,Enrollment>("INSERT INTO company_enrollments(id,program_id,user_id,reward_units,staked_points,consented_at,terms_version) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO NOTHING RETURNING *").bind(input.id).bind(id).bind(auth.user.id).bind(reward).bind(p.point_stake).bind(if p.uses_points() && input.accept_terms {Some(now)} else {None}).bind(if p.uses_points() {Some(p.version)} else {None}).fetch_optional(&mut *tx).await?.ok_or_else(||ApiError::conflict("BUSINESS_ID_CONFLICT"))?;
+    if p.uses_points() {
+        business_points::pledge(&mut tx, &p, &saved, auth.user.id).await?;
+    }
     sqlx::query(
         "UPDATE company_programs SET reserved_units=reserved_units+$1,updated_at=now() WHERE id=$2",
     )
@@ -743,6 +796,7 @@ pub async fn enrollment_detail(
     let (p, e, op) = private_access(&mut tx, auth.user.id, org, id, enrol, op).await?;
     let uploads:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(u)-'content'-'file_hash'-'fingerprint'-'user_id' FROM company_uploads u WHERE enrollment_id=$1 ORDER BY received_at,id").bind(enrol).fetch_all(&mut *tx).await?;
     let events:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(e)-'actor_id' FROM company_enrollment_events e WHERE enrollment_id=$1 ORDER BY id").bind(enrol).fetch_all(&mut *tx).await?;
+    let e = business_points::enrollment_json(&p, &e, Utc::now())?;
     tx.commit().await?;
     Ok(Json(
         json!({"program":p,"enrollment":e,"uploads":uploads,"events":events,"is_operator":op,"network":"LOCAL","real_money":false}),
@@ -937,9 +991,20 @@ async fn process_upload(
         json!({"upload_id":upload,"decision":decision,"reason":reason}),
     )
     .await?;
-    Ok(Json(
-        json!({"id":upload,"decision":decision,"reason":reason,"duplicate":false}),
-    ))
+    let mut result = json!({"id":upload,"decision":decision,"reason":reason,"duplicate":false});
+    if p.uses_points() && decision == "ACCEPTED" {
+        let settlement = business_points::settle(tx, p, enrol, user).await?;
+        for key in [
+            "reward_paid",
+            "awarded_points",
+            "stake_returned_points",
+            "unit",
+            "simulation",
+        ] {
+            result[key] = settlement[key].clone();
+        }
+    }
+    Ok(Json(result))
 }
 async fn recalculate(tx: &mut Transaction<'_, Postgres>, enrol: Uuid) -> Result<(), ApiError> {
     sqlx::query("UPDATE company_enrollments SET assessment=CASE WHEN EXISTS(SELECT 1 FROM company_uploads WHERE enrollment_id=$1 AND decision='ACCEPTED') THEN 'MET' WHEN EXISTS(SELECT 1 FROM company_uploads WHERE enrollment_id=$1 AND decision='REVIEW_REQUIRED') THEN 'REVIEW_REQUIRED' ELSE 'NOT_MET' END WHERE id=$1").bind(enrol).execute(&mut **tx).await?;
@@ -1018,9 +1083,30 @@ pub async fn review(
         json!({"upload_id":input.upload_id,"accepted":input.accept,"reason":input.reason.trim()}),
     )
     .await?;
+    if p.uses_points() {
+        let assessment: String =
+            sqlx::query_scalar("SELECT assessment FROM company_enrollments WHERE id=$1")
+                .bind(enrol)
+                .fetch_one(&mut *tx)
+                .await?;
+        if assessment == "MET" {
+            let result = business_points::settle(&mut tx, &p, enrol, auth.user.id).await?;
+            tx.commit().await?;
+            return Ok(Json(result));
+        }
+    }
     tx.commit().await?;
     Ok(Json(json!({"ok":true})))
 }
+#[derive(FromRow)]
+struct RewardHint {
+    funder_id: Option<Uuid>,
+    user_id: Option<Uuid>,
+    state: String,
+    reward_units: i64,
+    template: String,
+}
+
 pub async fn claim(
     auth: Auth,
     State(state): State<AppState>,
@@ -1031,10 +1117,37 @@ pub async fn claim(
     auth.csrf(&headers)?;
     let op = prototype::operator(&state, auth.user.id).await?;
     let mut tx = state.pool.begin().await?;
-    let pair:Option<(Option<Uuid>,Option<Uuid>,String,i64)>=sqlx::query_as("SELECT p.funder_id,e.user_id,e.state,e.reward_units FROM company_enrollments e JOIN company_programs p ON p.id=e.program_id WHERE p.organization_id=$1 AND p.id=$2 AND e.id=$3").bind(org).bind(id).bind(enrol).fetch_optional(&mut *tx).await?;
-    let (funder, user, current, reward) = pair.ok_or_else(ApiError::not_found)?;
+    let pair:Option<RewardHint>=sqlx::query_as("SELECT p.funder_id,e.user_id,e.state,e.reward_units,p.template FROM company_enrollments e JOIN company_programs p ON p.id=e.program_id WHERE p.organization_id=$1 AND p.id=$2 AND e.id=$3").bind(org).bind(id).bind(enrol).fetch_optional(&mut *tx).await?;
+    let RewardHint {
+        funder_id: funder,
+        user_id: user,
+        state: current,
+        reward_units: reward,
+        template,
+    } = pair.ok_or_else(ApiError::not_found)?;
     if user != Some(auth.user.id) && !op {
         return Err(ApiError::not_found());
+    }
+    if template != "LEGACY" {
+        if current == "REWARDED" {
+            let e: Enrollment =
+                sqlx::query_as("SELECT * FROM company_enrollments WHERE id=$1 AND program_id=$2")
+                    .bind(enrol)
+                    .bind(id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            tx.commit().await?;
+            return Ok(Json(
+                json!({"ok":true,"state":"REWARDED","reward_paid":true,"awarded_points":e.awarded_points,"stake_returned_points":e.staked_points,"unit":"POINTS","simulation":true}),
+            ));
+        }
+        let user = user.ok_or_else(ApiError::not_found)?;
+        lock_people(&mut tx, user, auth.user.id).await?;
+        active_operator_org(&mut tx, org).await?;
+        let p = program(&mut tx, org, id).await?;
+        let result = business_points::settle(&mut tx, &p, enrol, auth.user.id).await?;
+        tx.commit().await?;
+        return Ok(Json(result));
     }
     if current == "REWARDED" {
         return Ok(Json(
@@ -1100,15 +1213,16 @@ pub async fn close(
     prototype::enabled(&state)?;
     auth.csrf(&headers)?;
     let mut tx = state.pool.begin().await?;
-    let funder: Option<Uuid> = sqlx::query_scalar(
-        "SELECT funder_id FROM company_programs WHERE id=$1 AND organization_id=$2",
+    let hint: Option<(Option<Uuid>, String)> = sqlx::query_as(
+        "SELECT funder_id,template FROM company_programs WHERE id=$1 AND organization_id=$2",
     )
     .bind(id)
     .bind(org)
     .fetch_optional(&mut *tx)
-    .await?
-    .flatten();
-    if funder.is_none() {
+    .await?;
+    let (funder, template) = hint.ok_or_else(ApiError::not_found)?;
+    let point_program = template != "LEGACY";
+    if funder.is_none() && !point_program {
         organizations::access(&mut tx, auth.user.id, org, true).await?;
         let p = program(&mut tx, org, id).await?;
         if matches!(p.state.as_str(), "CLOSED" | "ARCHIVED") && p.published_at.is_some() {
@@ -1116,8 +1230,12 @@ pub async fn close(
         }
         return Err(ApiError::not_found());
     }
-    let funder = funder.ok_or_else(ApiError::not_found)?;
-    lock_people(&mut tx, funder, auth.user.id).await?;
+    let funder = funder.unwrap_or(auth.user.id);
+    if point_program {
+        auth::lock_user(&mut tx, auth.user.id).await?;
+    } else {
+        lock_people(&mut tx, funder, auth.user.id).await?;
+    }
     organizations::access(&mut tx, auth.user.id, org, true).await?;
     let p = program(&mut tx, org, id).await?;
     if p.state == "CLOSED" || p.state == "ARCHIVED" {
@@ -1130,7 +1248,12 @@ pub async fn close(
         return Err(ApiError::conflict(reason));
     }
     let release = p.budget_units - p.paid_units - p.returned_units;
-    sqlx::query("INSERT INTO prototype_local_movements(id,user_id,action,wallet_delta,locked_delta,recipient_delta,issued_delta,business_program_id) VALUES($1,$2,'BUSINESS_RELEASE',$3,$4,0,0,$5)").bind(Uuid::new_v4()).bind(funder).bind(release).bind(-release).bind(id).execute(&mut *tx).await?;
+    if point_program {
+        business_points::release(&mut tx, &p, auth.user.id, release / business_points::SCALE)
+            .await?;
+    } else {
+        sqlx::query("INSERT INTO prototype_local_movements(id,user_id,action,wallet_delta,locked_delta,recipient_delta,issued_delta,business_program_id) VALUES($1,$2,'BUSINESS_RELEASE',$3,$4,0,0,$5)").bind(Uuid::new_v4()).bind(funder).bind(release).bind(-release).bind(id).execute(&mut *tx).await?;
+    }
     sqlx::query(
         "UPDATE company_enrollments SET state='CLOSED' WHERE program_id=$1 AND state='ENROLLED'",
     )

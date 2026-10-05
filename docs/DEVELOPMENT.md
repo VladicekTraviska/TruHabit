@@ -2,6 +2,12 @@
 
 Run commands from the repository root unless another directory is specified. Keep Cargo and npm lockfiles. Private credentials, databases and build output do not belong in source control.
 
+## Source hygiene
+
+Keep only active application source, database migrations, synthetic fixtures, reproducible tests, required build/run scripts, lockfiles and current technical references in the repository. Preserve audits, old designs, presentation material, installer/packaging utilities, one-off investigations, screenshots and verification logs in a separate working archive outside the source folder. Move useful material there rather than deleting it.
+
+Generated dependencies and private runtime state remain ignored in their required installation locations; do not move a running database, registered WSL disk or signing-key directory to tidy the checkout. Create temporary reports and browser captures directly in the external archive. Before publication, check the Git file list for credentials, real activity recordings and generated output.
+
 ## Native Windows
 
 Prerequisites: Windows x64, PowerShell, Node.js **24.14.0**, Visual Studio C++ Build Tools and Rust **1.98.1** with the MSVC toolchain. The repository pins Rust, rustfmt and Clippy.
@@ -13,7 +19,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-local.ps1
 
 The runner provisions local PostgreSQL **18.6**, creates protected credentials and separate application/test databases, builds the web/API, applies migrations and starts **http://127.0.0.1:8787**. PostgreSQL uses **55432**. Ctrl+C stops the API; the native database remains running. After a successful build, `run-local.ps1 -SkipBuild` reuses binaries and does not rebuild edited sources.
 
-Register an account and sign in. Development mode supports local email verification without an SMTP service; authentication still applies. LOCAL personal challenges and B2B programs need no wallet or external API credentials.
+Register an account and sign in. Development mode supports local email verification without an SMTP service; authentication still applies. LOCAL personal challenges and simulated B2B point programs need no wallet or external API credentials.
 
 ## Existing Linux/WSL environment
 

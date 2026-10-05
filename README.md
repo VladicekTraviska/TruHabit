@@ -5,7 +5,7 @@ A web application prototype for personal running commitments and voluntary, empl
 | Mode | Workflow | Funds |
 | --- | --- | --- |
 | Personal challenges (B2C) | Set a goal → activate a stake → upload GPX/FIT → check the recording → settle | LOCAL test credits or THT on Solana Devnet |
-| Team programs (B2B) | Create a workspace → fund a program → invite participants → check runs → pay rewards → close and archive | Employer-funded LOCAL test credits; participants do not stake or need Phantom |
+| Team programs (B2B) | Top up a simulated company pool → choose a template → publish → invite participants → check runs → automatically award points | Separate corporate benefit points; no Phantom. Employer Match uses an explicitly accepted pledge of already earned corporate points |
 | Personal plans | Create, edit and archive goals | Planning only; no deposit |
 
 THT is a custom test token, not USDC. The prototype does not process real payments, use mainnet or connect to live Garmin/Strava APIs. Manual activity files are checked for consistency and goal eligibility; they do not authenticate the runner.
@@ -21,7 +21,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-local.ps1
 
 The runner builds the frontend and API, provisions PostgreSQL **18.6** if needed, applies migrations and serves **http://127.0.0.1:8787/**. Its local database uses port **55432**. Keep the terminal open; Ctrl+C stops the API. The native database remains running and is reused on the next start.
 
-Register an account, sign in and choose **Local simulation**. Add test credits before activating a personal challenge or funding a team program. To use an older recording, choose **Use a saved GPX/FIT**; a new-run challenge enforces its agreed activity window. The bundled GPX/FIT examples are synthetic.
+Register an account and sign in. For personal challenges, choose **Local simulation** and add test credits before activation. For team programs, the owner tops up the simulated company point pool. To use an older recording, choose **Use a saved GPX/FIT**; a new-run challenge enforces its agreed activity window. The bundled GPX/FIT examples are synthetic.
 
 A source checkout includes no accounts, database passwords or signing keys. Devnet deposits and oracle settlements require separately provisioned operator credentials, Phantom, internet and test tokens. Linking Phantom alone does not transfer funds.
 
@@ -33,7 +33,7 @@ React and TypeScript provide the UI. A Rust/Axum API manages accounts, permissio
 
 The personal Devnet path adds a Node.js worker and an Anchor program. The stake is held in a program-controlled SPL token account. The trusted oracle authorizes success/failure settlement; cancellation and emergency timeout have separate contract conditions. The API persists signed commands before broadcast and verifies finalized transaction/account observations before recording a transfer as complete. Health data stays off-chain.
 
-The expandable **Live process** panel displays actual observed API requests, evidence checks and blockchain operations. HTTP success alone is not proof of a finalized transfer. B2B rewards are LOCAL database transactions.
+The expandable **Live process** panel displays actual observed API requests, evidence checks and blockchain operations. HTTP success alone is not proof of a finalized transfer. B2B rewards are local PostgreSQL transactions in a separate simulated point ledger. Activity Points, voluntary Events, Employer Match and a declining Monthly Budget are available; existing LOCAL team programs retain their original accounting.
 
 ## Source layout
 

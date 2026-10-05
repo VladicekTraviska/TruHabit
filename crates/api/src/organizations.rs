@@ -29,7 +29,7 @@ pub struct Organization {
 pub struct Program {
     pub(crate) id: Uuid,
     pub(crate) organization_id: Uuid,
-    title: String,
+    pub(crate) title: String,
     pub(crate) target_m: i32,
     currency: String,
     reward_minor: i64,
@@ -51,6 +51,18 @@ pub struct Program {
     pub(crate) review_deadline: Option<DateTime<Utc>>,
     pub(crate) published_at: Option<DateTime<Utc>>,
     pub(crate) closed_at: Option<DateTime<Utc>>,
+    pub(crate) template: String,
+    pub(crate) point_reward: i64,
+    pub(crate) point_stake: i64,
+    pub(crate) monthly_decline: bool,
+    pub(crate) previous_cycle_id: Option<Uuid>,
+    pub(crate) cycle_starts_at: Option<DateTime<Utc>>,
+    pub(crate) cycle_ends_at: Option<DateTime<Utc>>,
+}
+impl Program {
+    pub(crate) fn uses_points(&self) -> bool {
+        self.template != "LEGACY"
+    }
 }
 fn title(value: &str) -> Result<String, ApiError> {
     let value = value.trim();
@@ -220,7 +232,7 @@ async fn delete_reason(
     tx: &mut Transaction<'_, Postgres>,
     org: &Organization,
 ) -> Result<Option<&'static str>, ApiError> {
-    let (others, funded): (bool, bool) = sqlx::query_as("SELECT EXISTS(SELECT 1 FROM organization_members WHERE organization_id=$1 AND user_id<>$2),EXISTS(SELECT 1 FROM company_programs WHERE organization_id=$1 AND published_at IS NOT NULL)")
+    let (others, funded): (bool, bool) = sqlx::query_as("SELECT EXISTS(SELECT 1 FROM organization_members WHERE organization_id=$1 AND user_id<>$2),EXISTS(SELECT 1 FROM company_programs WHERE organization_id=$1 AND published_at IS NOT NULL) OR EXISTS(SELECT 1 FROM business_point_movements WHERE organization_id=$1)")
         .bind(org.id).bind(org.owner_id).fetch_one(&mut **tx).await?;
     Ok(if others {
         Some("WORKSPACE_HAS_OTHER_MEMBERS")
@@ -411,13 +423,59 @@ pub struct ProgramInput {
     id: Uuid,
     title: String,
     target_m: i32,
+    #[serde(default = "default_currency")]
     currency: String,
+    #[serde(default = "default_planning_reward")]
     reward_minor: i64,
     max_participants: i32,
+    #[serde(default = "default_template", skip_serializing_if = "legacy_template")]
+    template: String,
+    #[serde(default, skip_serializing_if = "zero_points")]
+    point_reward: i64,
+    #[serde(default, skip_serializing_if = "zero_points")]
+    point_stake: i64,
+}
+fn default_currency() -> String {
+    "CZK".into()
+}
+fn default_planning_reward() -> i64 {
+    100
+}
+fn default_template() -> String {
+    "LEGACY".into()
+}
+fn legacy_template(template: &str) -> bool {
+    template == "LEGACY"
+}
+fn zero_points(points: &i64) -> bool {
+    *points == 0
 }
 impl ProgramInput {
     fn validate(&mut self) -> Result<(), ApiError> {
         self.title = title(&self.title)?;
+        if !matches!(
+            self.template.as_str(),
+            "LEGACY" | "ACTIVITY_POINTS" | "EMPLOYER_MATCH" | "EVENT" | "MONTHLY_BUDGET"
+        ) {
+            return Err(ApiError::bad("INVALID_BUSINESS_TEMPLATE"));
+        }
+        if self.template != "LEGACY" {
+            if !(1..=100_000).contains(&self.point_reward)
+                || !(0..=100_000).contains(&self.point_stake)
+                || (self.template == "EMPLOYER_MATCH" && self.point_stake == 0)
+                || (self.template != "EMPLOYER_MATCH" && self.point_stake != 0)
+                || self
+                    .point_reward
+                    .checked_mul(i64::from(self.max_participants))
+                    .is_none_or(|total| total > 10_000_000)
+            {
+                return Err(ApiError::bad("INVALID_BUSINESS_POINT_TERMS"));
+            }
+            // These retained fields are legacy planning metadata, never a points/CZK conversion.
+            self.reward_minor = 100;
+        } else if self.point_reward != 0 || self.point_stake != 0 {
+            return Err(ApiError::bad("INVALID_BUSINESS_POINT_TERMS"));
+        }
         if self.id.is_nil()
             || self.currency != "CZK"
             || !(1000..=5000).contains(&self.target_m)
@@ -480,8 +538,8 @@ pub async fn create_program(
             "Prostor může mít nejvýše 100 návrhů programů.",
         ));
     }
-    let row=sqlx::query_as::<_,Program>("INSERT INTO company_programs(id,organization_id,title,target_m,currency,reward_minor,max_participants,creation_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(id) DO NOTHING RETURNING *")
-        .bind(input.id).bind(org).bind(&input.title).bind(input.target_m).bind(&input.currency).bind(input.reward_minor).bind(input.max_participants).bind(hash).fetch_optional(&mut *tx).await?.ok_or_else(||ApiError::conflict("Identifikátor již patří jinému požadavku."))?;
+    let row=sqlx::query_as::<_,Program>("INSERT INTO company_programs(id,organization_id,title,target_m,currency,reward_minor,max_participants,creation_hash,template,point_reward,point_stake,monthly_decline) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(id) DO NOTHING RETURNING *")
+        .bind(input.id).bind(org).bind(&input.title).bind(input.target_m).bind(&input.currency).bind(input.reward_minor).bind(input.max_participants).bind(hash).bind(&input.template).bind(input.point_reward).bind(input.point_stake).bind(input.template == "MONTHLY_BUDGET").fetch_optional(&mut *tx).await?.ok_or_else(||ApiError::conflict("Identifikátor již patří jinému požadavku."))?;
     event(
         &mut tx,
         org,
@@ -498,10 +556,18 @@ pub async fn create_program(
 pub struct ProgramUpdate {
     title: String,
     target_m: i32,
+    #[serde(default = "default_currency")]
     currency: String,
+    #[serde(default = "default_planning_reward")]
     reward_minor: i64,
     max_participants: i32,
     version: i32,
+    #[serde(default)]
+    template: Option<String>,
+    #[serde(default)]
+    point_reward: Option<i64>,
+    #[serde(default)]
+    point_stake: Option<i64>,
 }
 pub async fn update_program(
     auth: Auth,
@@ -511,15 +577,6 @@ pub async fn update_program(
     Json(input): Json<ProgramUpdate>,
 ) -> Result<Json<Program>, ApiError> {
     auth.csrf(&headers)?;
-    let mut values = ProgramInput {
-        id,
-        title: input.title,
-        target_m: input.target_m,
-        currency: input.currency,
-        reward_minor: input.reward_minor,
-        max_participants: input.max_participants,
-    };
-    values.validate()?;
     let mut tx = state.pool.begin().await?;
     auth::lock_user(&mut tx, auth.user.id).await?;
     access(&mut tx, auth.user.id, org, true).await?;
@@ -536,8 +593,20 @@ pub async fn update_program(
             "Program se změnil nebo byl archivován. Načtěte ho znovu.",
         ));
     }
-    let row=sqlx::query_as::<_,Program>("UPDATE company_programs SET title=$1,target_m=$2,reward_minor=$3,max_participants=$4,version=version+1,updated_at=now() WHERE id=$5 AND organization_id=$6 RETURNING *")
-        .bind(values.title).bind(values.target_m).bind(values.reward_minor).bind(values.max_participants).bind(id).bind(org).fetch_one(&mut *tx).await?;
+    let mut values = ProgramInput {
+        id,
+        title: input.title,
+        target_m: input.target_m,
+        currency: input.currency,
+        reward_minor: input.reward_minor,
+        max_participants: input.max_participants,
+        template: input.template.unwrap_or(old.template),
+        point_reward: input.point_reward.unwrap_or(old.point_reward),
+        point_stake: input.point_stake.unwrap_or(old.point_stake),
+    };
+    values.validate()?;
+    let row=sqlx::query_as::<_,Program>("UPDATE company_programs SET title=$1,target_m=$2,reward_minor=$3,max_participants=$4,version=version+1,updated_at=now(),template=$7,point_reward=$8,point_stake=$9,monthly_decline=$10 WHERE id=$5 AND organization_id=$6 RETURNING *")
+        .bind(values.title).bind(values.target_m).bind(values.reward_minor).bind(values.max_participants).bind(id).bind(org).bind(&values.template).bind(values.point_reward).bind(values.point_stake).bind(values.template == "MONTHLY_BUDGET").fetch_one(&mut *tx).await?;
     event(
         &mut tx,
         org,
