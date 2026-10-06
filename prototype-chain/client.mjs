@@ -21,8 +21,28 @@ export async function localKey(name){
   if(configured&&!isAbsolute(configured))throw Error('INVALID_KEY_DIRECTORY');
   const path=configured?join(configured,`prototype-${name}.json`):new URL(`../.local/prototype-${name}.json`,import.meta.url);
   let source;
-  try{source=await readFile(path,'utf8');}catch(error){if(error.code==='ENOENT'&&name==='oracle')throw Error('CHAIN_ORACLE_NOT_CONFIGURED');throw error;}
-  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(source)));
+  try{source=await readFile(path,'utf8');}catch(error){
+    if(name==='oracle')throw Error(error.code==='ENOENT'?'CHAIN_ORACLE_NOT_CONFIGURED':'CHAIN_ORACLE_UNREADABLE');
+    throw error;
+  }
+  try{
+    if(source.length>4096)throw Error();
+    const bytes=JSON.parse(source);
+    if(!Array.isArray(bytes)||bytes.length!==64||bytes.some(byte=>!Number.isInteger(byte)||byte<0||byte>255))throw Error();
+    return Keypair.fromSecretKey(Uint8Array.from(bytes));
+  }catch{throw Error(name==='oracle'?'CHAIN_ORACLE_INVALID_KEY':'INVALID_KEY_FILE');}
+}
+async function configuredOracle(){
+  const oracle=await localKey('oracle');
+  if(!oracle.publicKey.equals(ORACLE))throw Error('WRONG_ORACLE_KEY');
+  return oracle;
+}
+export async function oracleReadiness(){
+  try{await configuredOracle();return {oracle_configured:true,oracle_reason:null};}
+  catch(error){
+    const codes=['CHAIN_ORACLE_NOT_CONFIGURED','CHAIN_ORACLE_UNREADABLE','CHAIN_ORACLE_INVALID_KEY','WRONG_ORACLE_KEY','INVALID_KEY_DIRECTORY'];
+    return {oracle_configured:false,oracle_reason:codes.includes(error.message)?error.message:'CHAIN_ORACLE_INVALID_KEY'};
+  }
 }
 export function identity(c){
   if(!/^[0-9a-f-]{36}$/i.test(c.id))throw Error('INVALID_CHALLENGE');
@@ -40,15 +60,19 @@ function terms(c){
   return {dates,hash:Buffer.from(c.terms_hash,'hex')};
 }
 export async function balance(owner){
+  const oracle=await oracleReadiness();
   await network();
   const key=new PublicKey(owner);
   const [sol,program,mintAccount]=await Promise.all([connection.getBalance(key),connection.getAccountInfo(PROGRAM),connection.getAccountInfo(MINT)]);
   let amount='0';
   if(mintAccount){const mint=await getMint(connection,MINT);if(mint.decimals!==6)throw Error('INVALID_MINT');
     const ata=getAssociatedTokenAddressSync(MINT,key);if(await connection.getAccountInfo(ata)) amount=(await getAccount(connection,ata)).amount.toString();}
-  return {network:'solana-devnet',genesis:NETWORK,program:PROGRAM.toBase58(),mint:MINT.toBase58(),recipient:RECIPIENT.toBase58(),token_label:'TruHabit Test Token',decimals:6,amount_units:amount,sol_lamports:sol,deployed:!!program?.executable&&!!mintAccount,checked_at:new Date().toISOString()};
+  return {network:'solana-devnet',genesis:NETWORK,program:PROGRAM.toBase58(),mint:MINT.toBase58(),recipient:RECIPIENT.toBase58(),token_label:'TruHabit Test Token',decimals:6,amount_units:amount,sol_lamports:sol,deployed:!!program?.executable&&!!mintAccount,...oracle,checked_at:new Date().toISOString()};
 }
 export async function prepare(c,action){
+  // Refuse unavailable oracle signing before any RPC or wallet request. Owner
+  // cancellation and emergency timeout remain independent of this private key.
+  const oracle=['DEPOSIT','SUCCESS','FAILURE'].includes(action)?await configuredOracle():null;
   await network();
   const program=await connection.getAccountInfo(PROGRAM);
   if(!program?.executable)throw Error('PROTOTYPE_NOT_DEPLOYED');
@@ -81,8 +105,7 @@ export async function prepare(c,action){
     tx.add(new TransactionInstruction({programId:PROGRAM,keys:[key(userSigns?owner:ORACLE,true),key(MINT),key(commitment,false,true),key(vault,false,true),key(destination,false,true),key(TOKEN_PROGRAM_ID)],data:Buffer.concat([disc('settle'),Buffer.from([actions[action]])])}));
   }
   // Owner exits need neither the oracle's secret nor its signature.
-  if(['DEPOSIT','SUCCESS','FAILURE'].includes(action)){
-    const oracle=await localKey('oracle');if(!oracle.publicKey.equals(ORACLE))throw Error('WRONG_ORACLE_KEY');
+  if(oracle){
     if(action==='DEPOSIT')tx.partialSign(oracle);else tx.sign(oracle);
   }
   return {transaction:tx.serialize({requireAllSignatures:!userSigns}).toString('base64'),message:tx.serializeMessage().toString('base64'),last_valid_block_height:block.lastValidBlockHeight,user_signs:userSigns,chain:{network:'solana-devnet',genesis:NETWORK,program:PROGRAM.toBase58(),mint:MINT.toBase58(),recipient:RECIPIENT.toBase58(),owner:owner.toBase58(),commitment:commitment.toBase58(),vault:vault.toBase58(),terms_hash:c.terms_hash}};

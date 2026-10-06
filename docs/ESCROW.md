@@ -32,6 +32,10 @@ Rust checks the recording and target. The Node worker prepares and validates the
 
 The oracle is trusted. Solana establishes authorized token movement under contract rules, not runner identity or authenticity of an uploaded file. A public source checkout excludes private keys. Existing-deployment operation needs the matching securely provisioned oracle; an independent deployment requires coordinated identities in both program and client.
 
+The balance response also reports whether this installation can read the matching oracle key. The interface checks this before an owner activates a stake or requests result settlement. The worker's local `oracle_readiness` operation exposes only a boolean and a fixed diagnostic code; it exposes no key bytes or private directory. Oracle-required preparation validates the key before contacting RPC. Owner cancellation and emergency timeout refund remain independent of the oracle key.
+
+Provision only the Devnet oracle key into an operator's private settings directory (the default is `.local/prototype-oracle.json`, or an absolute `TRUHABIT_KEY_DIR`). Keep it out of Git and generic distributable archives. A private repair kit for a trusted presenter must be treated as operator credential material: it authorizes shared Devnet deposits and result settlements, although the tokens have no monetary value. It needs neither the Phantom secret, mint authority nor program upgrade key. Reload the interface and refresh the recorded challenge status after provisioning; installation changes cannot extend recorded challenge deadlines.
+
 ## Local verification
 
 Install the required SBF tooling separately: `cargo-build-sbf` **4.4.0** with platform-tools **v1.57**, plus the pinned host Rust toolchain. The check script does not install the full Solana development environment.

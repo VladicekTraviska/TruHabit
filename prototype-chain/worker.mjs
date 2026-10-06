@@ -1,10 +1,11 @@
 // Private stdin protocol. No HTTP listener, no client-supplied key paths or RPC endpoints.
-import {balance,prepare,validateSigned,broadcast,reconcile} from './client.mjs';
+import {balance,oracleReadiness,prepare,validateSigned,broadcast,reconcile} from './client.mjs';
 let text='';
 try {
   for await(const chunk of process.stdin){text+=chunk;if(text.length>20000)throw Error('INPUT_LIMIT');}
   const i=JSON.parse(text);let result;
   switch(i.operation){
+    case 'oracle_readiness':result=await oracleReadiness();break;
     case 'balance':result=await balance(i.owner);break;
     case 'prepare':result=await prepare(i.challenge,i.action);break;
     case 'validate':result=validateSigned(i.payload,i.transaction);break;

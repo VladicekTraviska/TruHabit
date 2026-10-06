@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Keypair,Transaction,TransactionInstruction,SystemProgram} from '@solana/web3.js';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,resolve,sep} from 'node:path';
 import {connection,NETWORK,PROGRAM,MINT,ORACLE,RECIPIENT,digest,identity,validateSigned,verifyState,reconcile,prepare} from '../client.mjs';
 import {TOKEN_PROGRAM_ID,getAssociatedTokenAddressSync} from '../spl.mjs';
 
@@ -11,6 +14,15 @@ function transaction(){return new Transaction({feePayer:owner.publicKey,recentBl
 function account(status=0){const b=Buffer.alloc(130);digest('account:Commitment').copy(b,0,0,8);identity(c).id.copy(b,8);owner.publicKey.toBuffer().copy(b,24);b.writeBigUInt64LE(5_000_000n,56);['starts_at','ends_at','upload_deadline','refund_after'].forEach((k,i)=>b.writeBigInt64LE(BigInt(Date.parse(c[k])/1000),64+8*i));Buffer.from(c.terms_hash,'hex').copy(b,96);b[129]=status;return {owner:PROGRAM,data:b};}
 function vault(){const b=Buffer.alloc(165);MINT.toBuffer().copy(b);identity(c).commitment.toBuffer().copy(b,32);b.writeBigUInt64LE(5_000_000n,64);b[108]=1;return {owner:TOKEN_PROGRAM_ID,data:b};}
 function chain(t,state){t.mock.method(connection,'getGenesisHash',async()=>NETWORK);t.mock.method(connection,'getAccountInfo',async address=>address.equals(identity(c).commitment)?state:vault());}
+async function privateKeys(t){
+  const root=await mkdtemp(join(tmpdir(),'truhabit-client-key-test-')),previous=process.env.TRUHABIT_KEY_DIR;
+  process.env.TRUHABIT_KEY_DIR=root;
+  t.after(async()=>{
+    if(previous===undefined)delete process.env.TRUHABIT_KEY_DIR;else process.env.TRUHABIT_KEY_DIR=previous;
+    assert.ok(resolve(root).startsWith(resolve(tmpdir())+sep));await rm(root,{recursive:true,force:true});
+  });
+  return root;
+}
 function settlement(status=4,signature='external-settlement'){
   const {commitment,vault:vaultKey}=identity(c),action=status-1;
   const recipient=action===1?RECIPIENT:owner.publicKey;
@@ -71,6 +83,7 @@ test('a different network refuses reconciliation before transaction inspection',
 });
 
 test('owner cancellation and hard timeout require only the owner signature',async t=>{
+  await privateKeys(t); // Both exits work even when this installation has no oracle.
   t.mock.method(connection,'getGenesisHash',async()=>NETWORK);
   const mint=Buffer.alloc(82);mint[44]=6;mint[45]=1;
   t.mock.method(connection,'getAccountInfo',async address=>{
@@ -91,6 +104,10 @@ test('owner cancellation and hard timeout require only the owner signature',asyn
 });
 
 test('a deposit with missing tokens or rent SOL refuses before wallet signing',async t=>{
+  const root=await privateKeys(t);
+  await writeFile(join(root,'prototype-oracle.json'),JSON.stringify(Array.from(owner.secretKey)));
+  // Pre-signing fund checks need the public oracle identity, never its real secret.
+  t.mock.method(Keypair,'fromSecretKey',()=>({publicKey:ORACLE}));
   t.mock.method(connection,'getGenesisHash',async()=>NETWORK);
   const mint=Buffer.alloc(82);mint[44]=6;mint[45]=1;
   let source=null;
