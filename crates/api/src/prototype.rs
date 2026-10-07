@@ -502,9 +502,17 @@ pub async fn review_queue(
     if !operator(&state, auth.user.id).await? {
         return Err(ApiError::forbidden());
     }
+    // Active challenges also expose settlement verdicts, including those without uploads.
     let rows: Vec<Challenge> = sqlx::query_as(
-        "SELECT * FROM prototype_challenges c WHERE state='ACTIVE' OR EXISTS(SELECT 1 FROM prototype_review_requests r WHERE r.challenge_id=c.id AND r.status='OPEN') ORDER BY created_at LIMIT 100",
+        "SELECT * FROM prototype_challenges c
+         WHERE (c.state='ACTIVE' AND c.refund_after>$1
+                AND NOT EXISTS(SELECT 1 FROM prototype_commands p
+                               WHERE p.challenge_id=c.id AND p.status IN ('PREPARED','SIGNED')))
+            OR EXISTS(SELECT 1 FROM prototype_review_requests r
+                      WHERE r.challenge_id=c.id AND r.status='OPEN')
+         ORDER BY c.created_at,c.id LIMIT 100",
     )
+    .bind(Utc::now())
     .fetch_all(&state.pool)
     .await?;
     Ok(Json(json!({"challenges":rows})))

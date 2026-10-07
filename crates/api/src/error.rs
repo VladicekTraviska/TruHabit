@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    http::StatusCode,
+    http::{HeaderValue, StatusCode, header::RETRY_AFTER},
     response::{IntoResponse, Response},
 };
 
@@ -9,6 +9,7 @@ pub struct ApiError {
     pub status: StatusCode,
     pub code: &'static str,
     pub message: String,
+    pub retry_after_seconds: Option<u64>,
 }
 impl ApiError {
     pub fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
@@ -16,6 +17,7 @@ impl ApiError {
             status,
             code,
             message: message.into(),
+            retry_after_seconds: None,
         }
     }
     pub fn bad(message: impl Into<String>) -> Self {
@@ -51,6 +53,16 @@ impl ApiError {
     pub fn unavailable(message: impl Into<String>) -> Self {
         Self::new(StatusCode::SERVICE_UNAVAILABLE, "UNAVAILABLE", message)
     }
+    pub fn rate_limited(retry_after_seconds: u64) -> Self {
+        Self {
+            retry_after_seconds: Some(retry_after_seconds),
+            ..Self::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                "RATE_LIMITED",
+                "Příliš mnoho pokusů. Zkuste to prosím později.",
+            )
+        }
+    }
 }
 impl From<sqlx::Error> for ApiError {
     fn from(error: sqlx::Error) -> Self {
@@ -68,10 +80,16 @@ impl From<sqlx::Error> for ApiError {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (
+        let mut response = (
             self.status,
             Json(serde_json::json!({"code": self.code, "error": self.message})),
         )
-            .into_response()
+            .into_response();
+        if let Some(seconds) = self.retry_after_seconds
+            && let Ok(value) = HeaderValue::from_str(&seconds.to_string())
+        {
+            response.headers_mut().insert(RETRY_AFTER, value);
+        }
+        response
     }
 }

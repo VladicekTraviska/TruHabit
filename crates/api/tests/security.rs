@@ -931,11 +931,13 @@ impl TestApp {
         session: Option<&Session>,
         key: Option<&str>,
     ) -> (StatusCode, Value, String) {
+        let origin = url::Url::parse(&self.state.config.origin).unwrap();
+        let host = &origin[url::Position::BeforeHost..url::Position::AfterPort];
         let mut builder = Request::builder()
             .method(method)
             .uri(path)
-            .header("host", "127.0.0.1:8787")
-            .header("origin", "http://127.0.0.1:8787")
+            .header("host", host)
+            .header("origin", &self.state.config.origin)
             .header("x-truhabit-request", "web")
             .header("content-type", "application/json");
         if let Some(s) = session {
@@ -2473,6 +2475,353 @@ async fn csrf_origin_and_unauthenticated_mutations_are_rejected() {
 }
 
 #[tokio::test]
+async fn auth_recovery_logout_login_cycles_preserve_the_account_and_rotate_csrf() {
+    let t = TestApp::new(false).await;
+    let email = "repeat-login@example.com";
+    let mut session = t.account(email).await;
+    let user = session.user;
+    let goal = t.goal(&session, &Uuid::new_v4().to_string()).await;
+    for _ in 0..12 {
+        let (status, _, cleared) = t
+            .request("POST", "/api/auth/logout", json!({}), Some(&session), None)
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(cleared.starts_with(&format!("{}=;", t.state.config.cookie_name())));
+        assert!(cleared.contains("Max-Age=0"));
+        assert_eq!(
+            t.request(
+                "GET",
+                "/api/auth/session",
+                Value::Null,
+                Some(&session),
+                None
+            )
+            .await
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+        let old = session;
+        session = t.login(email, PASSWORD).await;
+        assert_eq!(session.user, user);
+        assert_ne!(session.cookie, old.cookie);
+        assert_ne!(session.csrf, old.csrf);
+        let mut stale_csrf = session.clone();
+        stale_csrf.csrf = old.csrf;
+        assert_eq!(
+            t.request(
+                "PATCH",
+                "/api/account",
+                json!({"display_name":"Stale request"}),
+                Some(&stale_csrf),
+                None
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN
+        );
+        let (status, goals, _) = t
+            .request("GET", "/api/goals", Value::Null, Some(&session), None)
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(goals["goals"][0]["id"], goal["id"]);
+    }
+    let ip_attempts: i32 = sqlx::query_scalar("SELECT count FROM rate_limits WHERE key_hash=$1")
+        .bind(crypto::digest("login-ip:127.0.0.1"))
+        .fetch_one(&t.pool)
+        .await
+        .unwrap();
+    assert_eq!(ip_attempts, 13);
+    let account_limits: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM rate_limits WHERE key_hash=$1")
+            .bind(crypto::digest(format!("login-account:{email}")))
+            .fetch_one(&t.pool)
+            .await
+            .unwrap();
+    assert_eq!(account_limits, 0);
+    t.finish().await;
+}
+
+#[tokio::test]
+async fn auth_recovery_deleted_email_can_be_registered_with_a_new_password_and_stale_cookie() {
+    let t = TestApp::new(true).await;
+    let email = "recreated@example.com";
+    let old = t.account(email).await;
+    let (status, body, cleared) = t
+        .request(
+            "DELETE",
+            "/api/account",
+            json!({"password":PASSWORD,"confirmation":"DELETE"}),
+            Some(&old),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(cleared.starts_with(&format!("{}=;", t.state.config.cookie_name())));
+    assert!(cleared.contains("Max-Age=0"));
+    for table in ["users", "sessions", "auth_tokens", "mail_outbox"] {
+        let column = if table == "users" { "id" } else { "user_id" };
+        let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT count(*) FROM {table} WHERE {column}=$1"
+        )))
+        .bind(old.user)
+        .fetch_one(&t.pool)
+        .await
+        .unwrap();
+        assert_eq!(count, 0, "Deleted account retained rows in {table}");
+    }
+    let new_password = "a replacement test passphrase 456";
+    let (status, body, _) = t
+        .request(
+            "POST",
+            "/api/auth/register",
+            json!({"email":" RECREATED@EXAMPLE.COM ","password":new_password,"display_name":"New account"}),
+            Some(&old),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body, cookie) = t
+        .request(
+            "POST",
+            "/api/auth/login",
+            json!({"email":email,"password":new_password}),
+            Some(&old),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let recreated = Session {
+        cookie: cookie.split(';').next().unwrap().into(),
+        csrf: body["csrf_token"].as_str().unwrap().into(),
+        user: Uuid::nil(),
+    };
+    let (status, body, _) = t
+        .request(
+            "GET",
+            "/api/auth/session",
+            Value::Null,
+            Some(&recreated),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_ne!(body["user"]["id"], old.user.to_string());
+    assert_eq!(body["user"]["display_name"], "New account");
+    assert_eq!(body["user"]["email"], email);
+    assert_eq!(
+        t.request("GET", "/api/auth/session", Value::Null, Some(&old), None)
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (status, body, _) = t
+        .request(
+            "POST",
+            "/api/auth/login",
+            json!({"email":email,"password":PASSWORD}),
+            None,
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["code"], "INVALID_CREDENTIALS");
+    t.finish().await;
+}
+
+#[tokio::test]
+async fn auth_recovery_blocked_deletion_does_not_claim_duplicate_registration_created_an_account() {
+    let t = TestApp::new(false).await;
+    let email = "undeleted@example.com";
+    let old = t.account(email).await;
+    let (status, body, _) = t
+        .request(
+            "POST",
+            "/api/organizations",
+            json!({"id":Uuid::new_v4(),"name":"Owned workspace"}),
+            Some(&old),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, _, cookie) = t
+        .request(
+            "DELETE",
+            "/api/account",
+            json!({"password":PASSWORD,"confirmation":"DELETE"}),
+            Some(&old),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(cookie.is_empty());
+    let replacement_password = "a replacement test passphrase 456";
+    let (status, body, _) = t
+        .request(
+            "POST",
+            "/api/auth/register",
+            json!({"email":email,"password":replacement_password,"display_name":"Replacement"}),
+            None,
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["code"], "ACCOUNT_EXISTS");
+    assert_eq!(
+        t.request(
+            "POST",
+            "/api/auth/login",
+            json!({"email":email,"password":replacement_password}),
+            None,
+            None
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(t.login(email, PASSWORD).await.user, old.user);
+    let (status, body, _) = t
+        .request("GET", "/api/auth/session", Value::Null, Some(&old), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["user"]["display_name"], "Běžec");
+    t.finish().await;
+}
+
+#[tokio::test]
+async fn auth_recovery_production_duplicate_registration_remains_indistinguishable() {
+    let mut t = TestApp::new(true).await;
+    let mut config = (*t.state.config).clone();
+    config.production = true;
+    config.origin = "https://app.example.com".into();
+    config.validate().unwrap();
+    t.state.config = std::sync::Arc::new(config);
+    t.app = router(t.state.clone(), "missing-dist");
+    let registration =
+        json!({"email":"private@example.com","password":PASSWORD,"display_name":"First"});
+    let (created_status, created, _) = t
+        .request("POST", "/api/auth/register", registration, None, None)
+        .await;
+    let (duplicate_status, duplicate, _) = t
+        .request(
+            "POST",
+            "/api/auth/register",
+            json!({"email":"private@example.com","password":"another private passphrase 456","display_name":"Duplicate"}),
+            None,
+            None,
+        )
+        .await;
+    assert_eq!(created_status, StatusCode::OK);
+    assert_eq!(duplicate_status, created_status);
+    assert_eq!(duplicate, created);
+    let session = t.login("private@example.com", PASSWORD).await;
+    assert!(session.cookie.starts_with("__Host-truhabit="));
+    t.finish().await;
+}
+
+#[tokio::test]
+async fn auth_recovery_parallel_local_instances_keep_their_browser_sessions_separate() {
+    let first = TestApp::new(false).await;
+    let mut second = TestApp::new(false).await;
+    let mut config = (*second.state.config).clone();
+    config.origin = "http://127.0.0.1:8788".into();
+    config.bind = "127.0.0.1:8788".parse().unwrap();
+    second.state.config = std::sync::Arc::new(config);
+    second.app = router(second.state.clone(), "missing-dist");
+    let a = first.account("first-instance@example.com").await;
+    let b = second.account("second-instance@example.com").await;
+    assert_ne!(
+        a.cookie.split_once('=').unwrap().0,
+        b.cookie.split_once('=').unwrap().0
+    );
+    let jar = format!("{}; {}", a.cookie, b.cookie);
+    let mut shared_a = a.clone();
+    shared_a.cookie = jar.clone();
+    let mut shared_b = b.clone();
+    shared_b.cookie = jar;
+    for (app, session) in [(&first, &shared_a), (&second, &shared_b)] {
+        let (status, body, _) = app
+            .request("GET", "/api/auth/session", Value::Null, Some(session), None)
+            .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["user"]["id"], session.user.to_string());
+    }
+    let (status, _, cleared) = first
+        .request("POST", "/api/auth/logout", json!({}), Some(&shared_a), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        cleared.split_once('=').unwrap().0,
+        a.cookie.split_once('=').unwrap().0
+    );
+    assert_eq!(
+        second
+            .request(
+                "GET",
+                "/api/auth/session",
+                Value::Null,
+                Some(&shared_b),
+                None
+            )
+            .await
+            .0,
+        StatusCode::OK
+    );
+    first.finish().await;
+    second.finish().await;
+}
+
+#[tokio::test]
+async fn auth_recovery_rate_limit_reports_the_remaining_original_window() {
+    let t = TestApp::new(false).await;
+    let key = "register:127.0.0.1";
+    let original_reset: chrono::DateTime<Utc> = sqlx::query_scalar(
+        "INSERT INTO rate_limits(key_hash,count,reset_at) VALUES($1,10,now()+interval '30 seconds') RETURNING reset_at",
+    )
+    .bind(crypto::digest(key))
+    .fetch_one(&t.pool)
+    .await
+    .unwrap();
+    for _ in 0..2 {
+        let error = truhabit_api::auth::rate_limit(&t.state, key, 10, 3600)
+            .await
+            .unwrap_err();
+        let response = axum::response::IntoResponse::into_response(error);
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        let seconds: u64 = response.headers()["retry-after"]
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1..=30).contains(&seconds));
+        let reset: chrono::DateTime<Utc> =
+            sqlx::query_scalar("SELECT reset_at FROM rate_limits WHERE key_hash=$1")
+                .bind(crypto::digest(key))
+                .fetch_one(&t.pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            reset, original_reset,
+            "Blocked retries must not extend the wait"
+        );
+    }
+    sqlx::query("UPDATE rate_limits SET reset_at=now()-interval '1 second' WHERE key_hash=$1")
+        .bind(crypto::digest(key))
+        .execute(&t.pool)
+        .await
+        .unwrap();
+    truhabit_api::auth::rate_limit(&t.state, key, 10, 3600)
+        .await
+        .unwrap();
+    let count: i32 = sqlx::query_scalar("SELECT count FROM rate_limits WHERE key_hash=$1")
+        .bind(crypto::digest(key))
+        .fetch_one(&t.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    t.finish().await;
+}
+
+#[tokio::test]
 async fn concurrent_create_is_idempotent_and_cannot_claim_funding() {
     let t = TestApp::new(false).await;
     let a = t.account("goals@example.com").await;
@@ -2832,7 +3181,7 @@ async fn idle_sessions_expire_and_login_rate_limits_cannot_be_bypassed_by_bad_pa
             .0,
         StatusCode::UNAUTHORIZED
     );
-    for _ in 0..9 {
+    for _ in 0..10 {
         assert_eq!(
             t.request(
                 "POST",

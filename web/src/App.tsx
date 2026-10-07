@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Buildings, Flag, Globe, SignOut, Target, UserCircle, CaretRight, ShieldCheck } from '@phosphor-icons/react';
-import { api, ApiError, setCsrf } from './api';
+import { api, ApiError, logoutSession, setCsrf } from './api';
 import type { Readiness, Session } from './types';
 import { Brand, Message } from './components';
 import { AuthPanel, readActionLink } from './AuthPanel';
@@ -44,6 +44,7 @@ export function App() {
       try {
         const value = await api<Session>('/api/auth/session');
         if (!active()) return;
+        if (currentSession.current && (currentSession.current.user.id !== value.user.id || currentSession.current.csrf_token !== value.csrf_token)) resetProcessSession();
         currentSession.current = value;
         setSession(value); setCsrf(value.csrf_token);
       } catch (e) {
@@ -54,11 +55,26 @@ export function App() {
     } catch (e) { if (active()) setError(e instanceof Error ? e.message : t('Aplikace není dostupná.')); }
     finally { if (active()) setLoading(false); }
   }
-  useEffect(() => { mounted.current = true; void load(); const pop = () => setPage(readPage()); window.addEventListener('popstate', pop); return () => { mounted.current = false; loadGeneration.current++; window.removeEventListener('popstate', pop); }; }, []);
+  useEffect(() => {
+    mounted.current = true;
+    void load();
+    const pop = () => setPage(readPage());
+    const reconcileSession = () => { if (document.visibilityState === 'visible') void load(); };
+    window.addEventListener('popstate', pop);
+    window.addEventListener('focus', reconcileSession);
+    document.addEventListener('visibilitychange', reconcileSession);
+    return () => {
+      mounted.current = false;
+      loadGeneration.current++;
+      window.removeEventListener('popstate', pop);
+      window.removeEventListener('focus', reconcileSession);
+      document.removeEventListener('visibilitychange', reconcileSession);
+    };
+  }, []);
   useEffect(() => { if (previousPage.current !== page && session) { main.current?.focus(); window.scrollTo({ top: 0, behavior: 'instant' }); } previousPage.current = page; }, [page, session]);
   function navigate(next: Page) { const url = new URL(location.href); url.searchParams.set('view', next); history.pushState(null, '', url.pathname + url.search); setPage(next); }
   function openPage(e: MouseEvent<HTMLAnchorElement>, next: Page) { if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); navigate(next); }
-  function signedOut() { loadGeneration.current++; currentSession.current = null; if (!mounted.current) return; setSession(null); setCsrf(''); resetProcessSession(); setPage('prototype'); }
+  function signedOut() { loadGeneration.current++; currentSession.current = null; setCsrf(''); resetProcessSession(); if (!mounted.current) return; setSession(null); setPage('prototype'); }
   async function profileReset(userId: string, csrfToken: string) {
     if (!mounted.current || currentSession.current?.user.id !== userId || currentSession.current?.csrf_token !== csrfToken) return;
     resetProcessSession();
@@ -71,7 +87,7 @@ export function App() {
     const active = () => mounted.current && currentSession.current?.user.id === identity && currentSession.current?.csrf_token === token;
     loadGeneration.current++;
     setLoggingOut(true);
-    try { await api('/api/auth/logout', { method: 'POST', body: {} }); if (active()) signedOut(); }
+    try { await logoutSession(); if (active()) signedOut(); }
     catch (e) { if (active()) setError(e instanceof Error ? e.message : t('Odhlášení se nezdařilo.')); }
     finally { if (mounted.current) setLoggingOut(false); }
   }
@@ -82,6 +98,7 @@ export function App() {
     { id: 'account' as const, label: p('My account', 'Můj účet'), icon: UserCircle },
   ];
   const signedIn = !!session && !link;
+  const sessionKey = session ? `${session.user.id}:${session.csrf_token}:${dataRevision}` : '';
   const sessionEnded = () => {
     if (session && mounted.current && currentSession.current?.user.id === session.user.id && currentSession.current.csrf_token === session.csrf_token) signedOut();
   };
@@ -96,7 +113,7 @@ export function App() {
       <main ref={main} className="wrap product-main" id="main" tabIndex={-1}>
         {error && <Message error><strong>{t('Aplikace není dostupná.')}</strong><span>{t(error)}</span><button className="button secondary" onClick={() => void load()}>{t('Zkusit znovu')}</button></Message>}
         {loading ? <div className="page-skeleton" role="status" aria-label={t('Načítám váš účet…')}><span>{t('Načítám váš účet…')}</span><div /><div /><div /></div> : !signedIn ? <AuthPanel onLogin={load} link={link} onDismissLink={() => setLink(null)} emailAvailable={readiness?.email_delivery ?? false} /> : readiness && <>
-          {page === 'prototype' ? <Prototype key={`${session.user.id}:${dataRevision}`} session={session} onExpired={sessionEnded} onAccount={() => navigate('account')} /> : page === 'goals' ? <Goals key={`${session.user.id}:${dataRevision}`} session={session} readiness={readiness} onExpired={sessionEnded} /> : page === 'business' ? <Business key={`${session.user.id}:${dataRevision}`} session={session} onExpired={sessionEnded} /> : <Account session={session} readiness={readiness} refresh={load} onSignedOut={sessionEnded} onDataReset={profileReset} />}
+          {page === 'prototype' ? <Prototype key={sessionKey} session={session} onExpired={sessionEnded} onAccount={() => navigate('account')} /> : page === 'goals' ? <Goals key={sessionKey} session={session} readiness={readiness} onExpired={sessionEnded} /> : page === 'business' ? <Business key={sessionKey} session={session} onExpired={sessionEnded} /> : <Account key={sessionKey} session={session} readiness={readiness} refresh={load} onSignedOut={sessionEnded} onDataReset={profileReset} />}
           <div className="session-footer"><span><ShieldCheck size={15} aria-hidden="true" />{p('Private workspace', 'Soukromý prostor')}</span><button onClick={() => void logout()} disabled={loggingOut}><SignOut size={17} aria-hidden="true" />{loggingOut ? p('Signing out…', 'Odhlašuji…') : t('Odhlásit se')}</button></div>
         </>}
       </main>

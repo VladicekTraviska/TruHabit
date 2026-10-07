@@ -35,6 +35,8 @@ export const messages: Record<string, string> = {
   'Firemní prostor byl odstraněn. Osobní cíle zůstaly nezměněné.': 'Company workspace deleted. Your personal goals are unchanged.',
   'Poslat odkaz na obnovu': 'Send recovery link',
   'Příliš mnoho pokusů. Zkuste to prosím později.': 'Too many attempts. Please try again later.',
+  'Další pokus je možný od': 'You can try again after',
+  'Tento e-mail už má účet. Přihlaste se původním heslem nebo si heslo obnovte.': 'This email already has an account. Sign in with the original password or reset it.',
   'Heslo je příliš dlouhé.': 'The password is too long.',
   'Přihlášení je vytížené. Zkuste to znovu.': 'Sign-in is busy. Please try again.',
   'Registrace je vytížená. Zkuste to znovu.': 'Registration is busy. Please try again.',

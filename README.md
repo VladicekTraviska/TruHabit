@@ -54,10 +54,9 @@ Contract source, database migrations, tests, IDL and lockfiles are included. His
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 npm.cmd --prefix prototype-chain test
-node --test web/scripts/process.test.mjs
 ```
 
-The first command checks Rust formatting, Clippy, workspace tests against a separate test database and the frontend build/localization. Contract tests require installed SBF tooling; see [Solana escrow](docs/ESCROW.md). Ordinary checks do not deploy a program or send tokens.
+The first command checks Rust formatting, Clippy, workspace tests against a separate test database, the frontend build/localization and frontend authentication/process regressions. Contract tests require installed SBF tooling; see [Solana escrow](docs/ESCROW.md). Ordinary checks do not deploy a program or send tokens.
 
 ## Reference
 

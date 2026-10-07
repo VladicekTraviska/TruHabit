@@ -1,7 +1,7 @@
-import { t } from './i18n';
-import { useState } from 'react';
+import { locale, t } from './i18n';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { api } from './api';
+import { api, ApiError, isAuthRetryBlocked, type AuthCooldown } from './api';
 import { Field, PasswordField, Message } from './components';
 import { ArrowRight, ShieldCheck } from '@phosphor-icons/react';
 import './sections-ui.css';
@@ -37,12 +37,27 @@ export function AuthPanel({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
+  const [accountExists, setAccountExists] = useState(false);
+  const [cooldown, setCooldown] = useState<AuthCooldown | null>(null);
+  const [now, setNow] = useState(Date.now);
+  const action = link?.purpose ?? mode;
+  const retryBlocked = isAuthRetryBlocked(cooldown, action, email, now);
+  useEffect(() => {
+    if (!cooldown) return;
+    const timer = window.setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= cooldown.until) setCooldown(null);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldown]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || retryBlocked) return;
     setBusy(true);
     setError('');
     setMessage('');
+    setAccountExists(false);
     const form = new FormData(event.currentTarget);
     try {
       if (link) {
@@ -86,6 +101,14 @@ export function AuthPanel({
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : t("Operaci se nepodařilo dokončit."));
+      if (e instanceof ApiError) {
+        setAccountExists(e.code === 'ACCOUNT_EXISTS');
+        if (e.retryAfterSeconds !== null) {
+          const current = Date.now();
+          setNow(current);
+          setCooldown({ action, email, until: current + e.retryAfterSeconds * 1000 });
+        }
+      }
     } finally {
       setBusy(false);
     }
@@ -143,8 +166,9 @@ export function AuthPanel({
           <button type="button" aria-pressed={mode === 'login'} disabled={busy} onClick={() => { setMode('login'); setError(''); setMessage(''); }}>{t('Přihlásit se')}</button>
           <button type="button" aria-pressed={mode === 'register'} disabled={busy} onClick={() => { setMode('register'); setError(''); setMessage(''); }}>{t('Vytvořit účet')}</button>
         </div>}
-        {error && <Message error>{error}</Message>}
+        {error && <Message error>{error}{accountExists && mode === 'register' && <button type="button" className="button secondary" disabled={busy} onClick={() => { setMode('login'); setMessage(error); setError(''); }}>{t('Přihlásit se')}</button>}</Message>}
         {message && <Message>{message}</Message>}
+        {retryBlocked && cooldown && <p className="field-hint" role="status">{t('Další pokus je možný od')} {new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(cooldown.until)}.</p>}
         <form onSubmit={submit} key={`${mode}-${link?.purpose ?? ''}`}>
           <fieldset disabled={busy}>
             {link?.purpose === 'verify_email' ? (
@@ -181,7 +205,7 @@ export function AuthPanel({
             )}
             <button
               className="button primary full-width"
-              disabled={busy || (!link && mode === 'forgot' && !emailAvailable)}
+              disabled={busy || retryBlocked || (!link && mode === 'forgot' && !emailAvailable)}
             >
               {busy
                 ? t("Zpracovávám…")

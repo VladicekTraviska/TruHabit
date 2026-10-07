@@ -810,7 +810,7 @@ impl TestApp {
         .unwrap();
         Actor {
             id,
-            cookie: format!("truhabit_local={token}"),
+            cookie: format!("{}={token}", self.state.config.cookie_name()),
             csrf,
         }
     }

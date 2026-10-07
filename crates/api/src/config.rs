@@ -122,11 +122,13 @@ impl Config {
     pub fn mail_enabled(&self) -> bool {
         self.mail_key.is_some() && self.smtp_host.is_some() && self.mail_from.is_some()
     }
-    pub fn cookie_name(&self) -> &'static str {
+    pub fn cookie_name(&self) -> String {
         if self.production {
-            "__Host-truhabit"
+            "__Host-truhabit".into()
         } else {
-            "truhabit_local"
+            // Browser cookies are shared between ports on the same host. Local
+            // installations use separate databases and must keep separate sessions.
+            format!("truhabit_local_{}", self.bind.port())
         }
     }
     pub fn allowed_origin(&self, origin: &str) -> bool {

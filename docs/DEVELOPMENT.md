@@ -32,10 +32,11 @@ From the prepared source copy, run `bash scripts/wsl/run.sh`; `--skip-build` reu
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 npm.cmd --prefix prototype-chain test
-node --test web/scripts/process.test.mjs
 ```
 
-The native script checks formatting, Clippy, Rust tests and the frontend build. Rust database tests require `TEST_DATABASE_URL` and fail explicitly if it is absent. The script supplies the separate `truhabit_test` database; tests create and drop isolated schemas. Never point test commands at a live user database.
+The native script checks formatting, Clippy, Rust tests, the frontend build and frontend authentication/process regressions. The frontend regressions check revoked-session logout recovery, rate-limit retry guidance and process-log privacy. Run just those regressions with `node --test web/scripts/auth.test.mjs web/scripts/process.test.mjs`.
+
+Rust database tests require `TEST_DATABASE_URL` and fail explicitly if it is absent. The script supplies the separate `truhabit_test` database; tests create and drop isolated schemas. Never point test commands at a live user database.
 
 In the prepared Linux environment, `bash scripts/wsl/verify.sh` performs the retained workspace, frontend, worker and active contract checks. Contract verification requires installed SBF tooling; see [Escrow](ESCROW.md). Ordinary checks do not deploy programs or transfer tokens.
 

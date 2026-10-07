@@ -24,5 +24,7 @@ try {
         & npm.cmd run build
         if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
     } finally { Pop-Location }
+    & node --test web/scripts/auth.test.mjs web/scripts/process.test.mjs
+    if ($LASTEXITCODE -ne 0) { throw 'Frontend auth/process tests failed.' }
     Write-Host 'All automated checks passed.'
 } finally { Set-Location -LiteralPath $originalLocation }

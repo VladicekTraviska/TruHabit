@@ -35,18 +35,16 @@ jobs:
         run: |
           rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed.' }
-      - name: Check API, rules, isolated PostgreSQL tests and frontend
+      - name: Check API, rules, isolated PostgreSQL tests and frontend auth/process tests
         shell: pwsh
         run: ./scripts/verify.ps1
-      - name: Check transaction client and process console
+      - name: Check transaction client
         shell: pwsh
         run: |
           npm.cmd --prefix prototype-chain ci --ignore-scripts
           if ($LASTEXITCODE -ne 0) { throw 'Chain dependencies failed.' }
           npm.cmd --prefix prototype-chain test
           if ($LASTEXITCODE -ne 0) { throw 'Chain tests failed.' }
-          node --test web/scripts/process.test.mjs
-          if ($LASTEXITCODE -ne 0) { throw 'Process console tests failed.' }
 
   contract:
     runs-on: windows-latest

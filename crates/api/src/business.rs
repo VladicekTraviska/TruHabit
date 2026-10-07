@@ -1018,7 +1018,20 @@ pub async fn review_queue(
     if !prototype::operator(&state, auth.user.id).await? {
         return Err(ApiError::forbidden());
     }
-    let enrollments:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(e)||jsonb_build_object('organization_id',p.organization_id,'program_title',p.title,'display_name',u.display_name) FROM company_enrollments e JOIN company_programs p ON p.id=e.program_id JOIN users u ON u.id=e.user_id WHERE p.state='PUBLISHED' AND e.state='ENROLLED' AND e.assessment IN ('MET','REVIEW_REQUIRED') ORDER BY e.created_at LIMIT 100").fetch_all(&state.pool).await?;
+    let enrollments: Vec<Value> = sqlx::query_scalar(
+        "SELECT to_jsonb(e)||jsonb_build_object('organization_id',p.organization_id,'program_title',p.title,'display_name',u.display_name)
+         FROM company_enrollments e
+         JOIN company_programs p ON p.id=e.program_id
+         JOIN organizations o ON o.id=p.organization_id
+         JOIN users u ON u.id=e.user_id
+         WHERE p.state='PUBLISHED' AND o.archived_at IS NULL
+           AND e.state='ENROLLED' AND e.assessment IN ('MET','REVIEW_REQUIRED')
+           AND (e.assessment='MET' OR p.review_deadline>$1)
+         ORDER BY e.created_at,e.id LIMIT 100",
+    )
+    .bind(Utc::now())
+    .fetch_all(&state.pool)
+    .await?;
     Ok(Json(json!({"enrollments":enrollments})))
 }
 pub async fn review(

@@ -100,14 +100,16 @@ pub async fn rate_limit(
     limit: i32,
     seconds: i32,
 ) -> Result<(), ApiError> {
-    let count:i32=sqlx::query_scalar("INSERT INTO rate_limits(key_hash,count,reset_at) VALUES($1,1,now()+make_interval(secs=>$2)) ON CONFLICT(key_hash) DO UPDATE SET count=CASE WHEN rate_limits.reset_at<=now() THEN 1 ELSE rate_limits.count+1 END, reset_at=CASE WHEN rate_limits.reset_at<=now() THEN excluded.reset_at ELSE rate_limits.reset_at END RETURNING count")
+    let (count, retry_after): (i32, i64) = sqlx::query_as(
+        "INSERT INTO rate_limits(key_hash,count,reset_at) VALUES($1,1,now()+make_interval(secs=>$2))
+         ON CONFLICT(key_hash) DO UPDATE
+         SET count=CASE WHEN rate_limits.reset_at<=now() THEN 1 ELSE rate_limits.count+1 END,
+             reset_at=CASE WHEN rate_limits.reset_at<=now() THEN excluded.reset_at ELSE rate_limits.reset_at END
+         RETURNING count,GREATEST(1,CEIL(EXTRACT(EPOCH FROM reset_at-now())))::bigint",
+    )
         .bind(crypto::digest(key)).bind(f64::from(seconds)).fetch_one(&state.pool).await?;
     if count > limit {
-        return Err(ApiError::new(
-            StatusCode::TOO_MANY_REQUESTS,
-            "RATE_LIMITED",
-            "Příliš mnoho pokusů. Zkuste to prosím později.",
-        ));
+        return Err(ApiError::rate_limited(retry_after as u64));
     }
     Ok(())
 }
@@ -209,6 +211,12 @@ pub async fn register(
         if state.config.mail_enabled() {
             mail::enqueue_token(&state, &mut tx, id, &email, "verify_email").await?;
         }
+    } else if !state.config.production {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "ACCOUNT_EXISTS",
+            "Tento e-mail už má účet. Přihlaste se původním heslem nebo si heslo obnovte.",
+        ));
     }
     tx.commit().await?;
     Ok(Json(
@@ -229,7 +237,8 @@ pub async fn login(
 ) -> Result<Response, ApiError> {
     let email = input.email.trim().to_lowercase();
     rate_limit(&state, &format!("login-ip:{}", peer), 40, 900).await?;
-    rate_limit(&state, &format!("login-account:{email}"), 10, 900).await?;
+    let account_limit = format!("login-account:{email}");
+    rate_limit(&state, &account_limit, 10, 900).await?;
     if input.password.len() > 512 || email.len() > 254 {
         return Err(ApiError::bad("Neplatný rozsah přihlašovacích údajů."));
     }
@@ -266,6 +275,12 @@ pub async fn login(
     sqlx::query("INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '24 hours')")
         .bind(crypto::digest(&raw)).bind(user_id).bind(&csrf).execute(&mut *tx).await?;
     event(&mut tx, user_id, "logged_in").await?;
+    // A verified login ends the sequence of failed account attempts. Keep the
+    // IP limit intact so repeated successful requests still bound hashing work.
+    sqlx::query("DELETE FROM rate_limits WHERE key_hash=$1")
+        .bind(crypto::digest(account_limit))
+        .execute(&mut *tx)
+        .await?;
     tx.commit().await?;
     with_cookie(&state, serde_json::json!({"csrf_token":csrf}), &raw, false)
 }

@@ -1,12 +1,17 @@
 //! Untrusted, manually supplied activities. Parsing never authenticates a runner.
 use chrono::{DateTime, Timelike, Utc};
-use fitparser::{FitDataRecord, Value, profile::MesgNum};
+use fitparser::{
+    FitDataRecord, Value,
+    de::{FitObject, FitStreamProcessor},
+    profile::MesgNum,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 
 pub const MAX_BYTES: usize = 16 * 1024 * 1024;
 const MAX_POINTS: usize = 100_000;
+const MAX_FIT_RECORDS: usize = 200_000;
 const GPX: &str = "http://www.topografix.com/GPX/1/1";
 const SENSOR_POLICY: &str = "manual-running-plausibility-v3";
 // Bounds are input/resource limits, not an accusation about an ultrarunner.
@@ -259,6 +264,33 @@ fn timestamp(r: &FitDataRecord, name: &str) -> Option<DateTime<Utc>> {
         _ => None,
     }
 }
+fn fit_records(mut bytes: &[u8], limit: usize) -> Result<Vec<FitDataRecord>> {
+    let mut processor = FitStreamProcessor::new();
+    let mut records = Vec::new();
+    while !bytes.is_empty() {
+        let (remaining, object) = processor
+            .deserialize_next(bytes)
+            .map_err(|_| UploadError("INVALID_FIT_CRC_OR_FORMAT"))?;
+        match object {
+            FitObject::DataMessage(message) => {
+                // A small FIT message can expand into many heap allocations.
+                // Stop before decoding/retaining records beyond the bound.
+                if records.len() >= limit {
+                    return Err(UploadError("TOO_MANY_SAMPLES"));
+                }
+                records.push(
+                    processor
+                        .decode_message(message)
+                        .map_err(|_| UploadError("INVALID_FIT_CRC_OR_FORMAT"))?,
+                );
+            }
+            FitObject::Crc(_) => processor.reset(),
+            FitObject::Header(_) | FitObject::DefinitionMessage(_) => {}
+        }
+        bytes = remaining;
+    }
+    Ok(records)
+}
 fn fit(bytes: &[u8], selected: Option<usize>) -> Result<Activity> {
     // Reject concatenated/trailing files instead of silently accepting their first activity.
     let header = usize::from(bytes[0]);
@@ -273,11 +305,7 @@ fn fit(bytes: &[u8], selected: Option<usize>) -> Result<Activity> {
     if size.checked_add(header + 2) != Some(bytes.len()) {
         return Err(UploadError("INVALID_FIT_LENGTH"));
     }
-    let records =
-        fitparser::from_bytes(bytes).map_err(|_| UploadError("INVALID_FIT_CRC_OR_FORMAT"))?;
-    if records.len() > 200_000 {
-        return Err(UploadError("TOO_MANY_SAMPLES"));
-    }
+    let records = fit_records(bytes, MAX_FIT_RECORDS)?;
     let sessions: Vec<_> = records
         .iter()
         .filter(|r| r.kind() == MesgNum::Session)
@@ -694,6 +722,91 @@ fn sensor_metric(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fit_bytes(data: &[u8]) -> Vec<u8> {
+        const CRC_TABLE: [u16; 16] = [
+            0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401, 0xA001, 0x6C00, 0x7800,
+            0xB401, 0x5000, 0x9C01, 0x8801, 0x4400,
+        ];
+        let mut bytes = vec![12, 0x20, 0, 0];
+        bytes.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(b".FIT");
+        bytes.extend_from_slice(data);
+        let mut crc = 0u16;
+        for byte in &bytes {
+            crc = (crc >> 4) ^ CRC_TABLE[(crc & 15) as usize] ^ CRC_TABLE[(byte & 15) as usize];
+            crc = (crc >> 4) ^ CRC_TABLE[(crc & 15) as usize] ^ CRC_TABLE[(byte >> 4) as usize];
+        }
+        bytes.extend_from_slice(&crc.to_le_bytes());
+        bytes
+    }
+
+    #[test]
+    fn fit_record_limit_stops_before_expanding_the_remaining_file() {
+        // Two empty Record messages, then a third and an invalid message. The
+        // limit must win before parsing the malformed tail or its CRC.
+        let definition = [0x40, 0, 0, 20, 0, 0];
+        let exact = fit_bytes(&[definition.as_slice(), &[0, 0]].concat());
+        assert_eq!(fit_records(&exact, 2).unwrap().len(), 2);
+        let over = fit_bytes(&[definition.as_slice(), &[0, 0, 0, 1]].concat());
+        assert!(fitparser::from_bytes(&over).is_err());
+        assert_eq!(fit_records(&over, 2).unwrap_err().0, "TOO_MANY_SAMPLES");
+
+        let mut data = definition.to_vec();
+        data.resize(data.len() + MAX_FIT_RECORDS + 1, 0);
+        assert_eq!(
+            parse(&fit_bytes(&data), None).unwrap_err().0,
+            "TOO_MANY_SAMPLES"
+        );
+
+        let mut corrupted = exact;
+        *corrupted.last_mut().unwrap() ^= 1;
+        assert_eq!(
+            fit_records(&corrupted, 2).unwrap_err().0,
+            "INVALID_FIT_CRC_OR_FORMAT"
+        );
+    }
+
+    #[test]
+    fn streaming_fit_preserves_fixture_decoding_sessions_and_crc_validation() {
+        let fixtures: [&[u8]; 4] = [
+            include_bytes!("../../../web/public/prototype/valid-run.fit"),
+            include_bytes!("../../../web/public/prototype/three-km-run.fit"),
+            include_bytes!("../../../web/public/prototype/multi-session.fit"),
+            include_bytes!("../../../web/public/prototype/cycling.fit"),
+        ];
+        for bytes in fixtures {
+            let expected = fitparser::from_bytes(bytes).unwrap();
+            let actual = fit_records(bytes, MAX_FIT_RECORDS).unwrap();
+            assert_eq!(
+                serde_json::to_value(actual).unwrap(),
+                serde_json::to_value(expected).unwrap()
+            );
+            let mut corrupted = bytes.to_vec();
+            *corrupted.last_mut().unwrap() ^= 1;
+            assert_eq!(
+                parse(&corrupted, None).unwrap_err().0,
+                "INVALID_FIT_CRC_OR_FORMAT"
+            );
+        }
+        let multi = include_bytes!("../../../web/public/prototype/multi-session.fit");
+        assert_eq!(parse(multi, None).unwrap_err().0, "SELECT_FIT_SESSION");
+        let first = parse(multi, Some(0)).unwrap();
+        let second = parse(multi, Some(1)).unwrap();
+        assert_ne!(first.fingerprint, second.fingerprint);
+        assert_eq!(first.telemetry.policy_version, SENSOR_POLICY);
+        assert_eq!(second.telemetry.policy_version, SENSOR_POLICY);
+        assert_eq!(
+            parse(
+                include_bytes!("../../../web/public/prototype/cycling.fit"),
+                None
+            )
+            .unwrap_err()
+            .0,
+            "RUNNING_SESSION_REQUIRED"
+        );
+    }
+
     fn track(extra: &str) -> String {
         format!(
             r#"<gpx xmlns="{GPX}" version="1.1"><trk><trkseg><trkpt lat="50" lon="14"><time>2026-09-01T10:00:00Z</time>{extra}</trkpt><trkpt lat="50.001" lon="14"><time>2026-09-01T10:00:30Z</time></trkpt></trkseg></trk></gpx>"#

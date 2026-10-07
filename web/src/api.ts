@@ -1,15 +1,40 @@
-import { beginApiTrace, finishApiTrace } from './process';
+import { beginApiTrace, finishApiTrace } from './process.ts';
 let csrf = '';
 export const setCsrf = (value: string) => {
   csrf = value;
 };
 export class ApiError extends Error {
+  public status: number;
+  public code: string;
+  public retryAfterSeconds: number | null;
   constructor(
     message: string,
-    public status = 0,
-    public code = 'NETWORK',
+    status = 0,
+    code = 'NETWORK',
+    retryAfterSeconds: number | null = null,
   ) {
     super(message);
+    this.status = status;
+    this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+export interface AuthCooldown {
+  action: string;
+  email: string;
+  until: number;
+}
+export function isAuthRetryBlocked(cooldown: AuthCooldown | null, action: string, email: string, now: number): boolean {
+  if (!cooldown || cooldown.action !== action || cooldown.until <= now) return false;
+  // Login/recovery can be limited by one email; another account may still sign in.
+  return action !== 'login' && action !== 'forgot' || cooldown.email.trim().toLowerCase() === email.trim().toLowerCase();
+}
+export async function logoutSession(): Promise<void> {
+  try {
+    await api('/api/auth/logout', { method: 'POST', body: {} });
+  } catch (error) {
+    // A session revoked in another tab/device is already signed out.
+    if (!(error instanceof ApiError && error.status === 401 && error.code === 'UNAUTHORIZED')) throw error;
   }
 }
 export async function api<T>(
@@ -52,7 +77,10 @@ export async function api<T>(
       if (res.status === 422) message = 'Zkontrolujte vyplněné údaje.';
     }
     finishApiTrace(trace, res.status, code, message);
-    throw new ApiError(message, res.status, code);
+    const retryHeader = res.headers.get('Retry-After');
+    const retrySeconds = retryHeader && /^\d+$/.test(retryHeader) ? Number(retryHeader) : NaN;
+    const retryAfterSeconds = res.status === 429 && Number.isSafeInteger(retrySeconds) && retrySeconds > 0 && retrySeconds <= 86400 ? retrySeconds : null;
+    throw new ApiError(message, res.status, code, retryAfterSeconds);
   }
   try {
     const value = await res.json() as T;
