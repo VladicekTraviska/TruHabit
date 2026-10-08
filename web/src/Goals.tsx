@@ -24,6 +24,7 @@ export function Goals({
   const [events, setEvents] = useState<GoalEvent[]>([]);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [creating, setCreating] = useState(false);
+  const [formRevision, setFormRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [moreLoading, setMoreLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -41,6 +42,23 @@ export function Goals({
   });
   const lock = useRef(false);
   const selectionRequest = useRef(0);
+  function rememberPending(command: Pending | null) {
+    setPending(command);
+    try {
+      if (command) sessionStorage.setItem(storageKey, JSON.stringify(command));
+      else sessionStorage.removeItem(storageKey);
+    } catch {
+      // A blocked or full browser store must not prevent saving or retrying in this tab.
+    }
+  }
+  function beginCreate() {
+    setFormRevision(value => value + 1);
+    setCreating(true);
+    setEditing(null);
+    setSelected(null);
+    setDetailLoading(false);
+    selectionRequest.current++;
+  }
   function fail(e: unknown) {
     if (e instanceof ApiError && e.status === 401) {
       onExpired();
@@ -99,8 +117,7 @@ export function Goals({
         });
       } else {
         const command = repeat ?? { key: crypto.randomUUID(), body: input };
-        sessionStorage.setItem(storageKey, JSON.stringify(command));
-        setPending(command);
+        rememberPending(command);
         try {
           result = await api<Goal>('/api/goals', {
             method: 'POST',
@@ -109,13 +126,11 @@ export function Goals({
           });
         } catch (e) {
           if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
-            sessionStorage.removeItem(storageKey);
-            setPending(null);
+            rememberPending(null);
           }
           throw e;
         }
-        sessionStorage.removeItem(storageKey);
-        setPending(null);
+        rememberPending(null);
       }
       setCreating(false);
       setEditing(null);
@@ -163,13 +178,7 @@ export function Goals({
         </div>
         <button
           className="button primary"
-          onClick={() => {
-            setCreating(true);
-            setEditing(null);
-            setSelected(null);
-            setDetailLoading(false);
-            selectionRequest.current++;
-          }}
+          onClick={beginCreate}
           disabled={disabled}
         ><Plus size={19} aria-hidden="true" />{t('New goal')} </button>
       </section>
@@ -190,6 +199,7 @@ export function Goals({
         <div className="panel section-loading" role="status"><span className="loading-spinner" aria-hidden="true" />{t("Načítám vaše cíle…")}</div>
       ) : creating || editing ? (
         <GoalForm
+          key={editing?.id ?? `new-${formRevision}`}
           initial={editing}
           disabled={disabled}
           onSave={(input) => void save(input, editing ?? undefined)}
@@ -243,7 +253,7 @@ export function Goals({
                   {error && !goals.length ? <button className="button secondary" onClick={() => { setError(''); setLoading(true); void load(); }}>{t('Zkusit znovu')}</button> : filter === 'DRAFT' && (
                     <button
                       className="button primary"
-                      onClick={() => setCreating(true)}
+                      onClick={beginCreate}
                       disabled={disabled}
                     >{t("Naplánovat první běh")} </button>
                   )}

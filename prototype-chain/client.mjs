@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {readFile} from 'node:fs/promises';
 import {isAbsolute,join} from 'node:path';
 import {Connection,PublicKey,Keypair,Transaction,TransactionInstruction,SystemProgram} from '@solana/web3.js';
@@ -9,7 +10,11 @@ export const PROGRAM=new PublicKey('24nGy1KAx5GSFR2C6xaHnRgKMqYyoNq3LNfu3fFtvNRa
 export const MINT=new PublicKey('BYa72dJf9S1sw4a4cmESd9DhinH8pQ6fy7gjbPm6VNp3');
 export const ORACLE=new PublicKey('8m8eyZih5Mjakb8CH5Bxsi7BLp2gbderP6bKuJPm96n4');
 export const RECIPIENT=new PublicKey('6dgtm5XMrG6VTSWZGtrpZMWgZHq6mr4JuzBbjBBJTD8e');
-export const connection=new Connection('https://api.devnet.solana.com',{commitment:'finalized',disableRetryOnRateLimit:true,fetch:async(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(15000)})});
+const historySignal=new AsyncLocalStorage();
+export const connection=new Connection('https://api.devnet.solana.com',{commitment:'finalized',disableRetryOnRateLimit:true,fetch:async(url,options)=>{
+  const signals=[AbortSignal.timeout(15000),options?.signal,historySignal.getStore()].filter(Boolean);
+  return fetch(url,{...options,signal:AbortSignal.any(signals)});
+}});
 export const digest=s=>createHash('sha256').update(s).digest();
 const disc=name=>digest('global:'+name).subarray(0,8);
 const key=(pubkey,isSigner=false,isWritable=false)=>({pubkey,isSigner,isWritable});
@@ -182,22 +187,64 @@ function settlementProof(c,status,signature,result,payload){
   }catch{return null;}
   return null;
 }
-async function recoverSettlement(c,status,known=[],payload){
-  for(const entry of known){const proof=settlementProof(c,status,entry.signature,entry.result,payload);if(proof)return proof;}
-  const candidates=await connection.getSignaturesForAddress(identity(c).commitment,{limit:20},'finalized');
-  for(const candidate of candidates){
-    if(candidate.err||known.some(entry=>entry.signature===candidate.signature))continue;
-    const result=await connection.getTransaction(candidate.signature,{commitment:'finalized',maxSupportedTransactionVersion:0});
-    const proof=settlementProof(c,status,candidate.signature,result,payload);if(proof)return proof;
+const HISTORY_PAGE_SIZE=20,HISTORY_MAX_PAGES=5,HISTORY_TIMEOUT_MS=8000;
+const HISTORY_EXHAUSTED=Symbol('history-exhausted');
+function historyBudget(){
+  const controller=new AbortController();let timer=null,pages=HISTORY_MAX_PAGES;
+  return {
+    observed:[],
+    page(){if(pages===0||controller.signal.aborted)return false;pages--;return true;},
+    async read(operation){
+      if(controller.signal.aborted)return HISTORY_EXHAUSTED;
+      if(timer===null)timer=setTimeout(()=>controller.abort(),HISTORY_TIMEOUT_MS);
+      let onAbort;
+      const aborted=new Promise(resolve=>{onAbort=()=>resolve(HISTORY_EXHAUSTED);controller.signal.addEventListener('abort',onAbort,{once:true});});
+      try{return await Promise.race([historySignal.run(controller.signal,operation),aborted]);}
+      catch(error){if(controller.signal.aborted)return HISTORY_EXHAUSTED;throw error;}
+      finally{controller.signal.removeEventListener('abort',onAbort);}
+    },
+    close(){if(timer!==null)clearTimeout(timer);controller.abort();}
+  };
+}
+async function finalizedHistory(c,budget,visit,known=[]){
+  const seen=new Set(known);let before;
+  // Later transfers can mention a settled commitment without changing it.
+  // Search older pages, with one shared page/time budget per reconciliation.
+  // Exhaustion retains PENDING; it never invents a transfer or permits a retry.
+  while(budget.page()){
+    const candidates=await budget.read(()=>connection.getSignaturesForAddress(identity(c).commitment,{limit:HISTORY_PAGE_SIZE,...(before?{before}:{})},'finalized'));
+    if(candidates===HISTORY_EXHAUSTED||candidates.length===0)return null;
+    for(const candidate of candidates.slice(0,HISTORY_PAGE_SIZE)){
+      if(candidate.err||seen.has(candidate.signature))continue;
+      seen.add(candidate.signature);
+      const result=await budget.read(()=>connection.getTransaction(candidate.signature,{commitment:'finalized',maxSupportedTransactionVersion:0}));
+      if(result===HISTORY_EXHAUSTED)return null;
+      budget.observed.push({signature:candidate.signature,result});
+      const match=visit(candidate.signature,result);
+      if(match)return match;
+    }
+    const next=candidates[Math.min(candidates.length,HISTORY_PAGE_SIZE)-1]?.signature;
+    if(!next||next===before||candidates.length<HISTORY_PAGE_SIZE)return null;
+    before=next;
   }
   return null;
 }
+async function recoverSettlement(c,status,known=[],payload,budget){
+  const observed=[...known,...budget.observed];
+  for(const entry of observed){const proof=settlementProof(c,status,entry.signature,entry.result,payload);if(proof)return proof;}
+  return finalizedHistory(c,budget,(signature,result)=>settlementProof(c,status,signature,result,payload),observed.map(entry=>entry.signature));
+}
 export async function reconcile(c,action,payload,signature){
+  const budget=historyBudget();
+  try{return await reconcileWithHistory(c,action,payload,signature,budget);}
+  finally{budget.close();}
+}
+async function reconcileWithHistory(c,action,payload,signature,budget){
   await network();
   if(action==='STATE'){
     const current=await verifyState(c);
     if(current.status===0)return {state:'ACTIVE',chain_status:0};
-    const settlement=await recoverSettlement(c,current.status);
+    const settlement=await recoverSettlement(c,current.status,[],undefined,budget);
     return settlement?{state:'RECOVERED',settlement}:{state:'PENDING',reason:'TERMINAL_HISTORY_UNAVAILABLE'};
   }
   const expected={DEPOSIT:0,SUCCESS:1,FAILURE:2,CANCEL:3,TIMEOUT:4}[action];
@@ -210,21 +257,18 @@ export async function reconcile(c,action,payload,signature){
     try{await verifyState(c,0);return true;}catch{return false;}
   }
   if(!signature){
-    const {commitment}=identity(c);
-    const signatures=await connection.getSignaturesForAddress(commitment,{limit:20},'finalized');
-    for(const candidate of signatures){
-      if(candidate.err)continue;
-      const found=await connection.getTransaction(candidate.signature,{commitment:'finalized',maxSupportedTransactionVersion:0});
-      if(found?.transaction.message.serialize().toString('base64')===payload.message){signature=candidate.signature;break;}
-    }
+    signature=await finalizedHistory(c,budget,(candidate,found)=>found?.transaction.message.serialize().toString('base64')===payload.message?candidate:null);
   }
-  const result=signature?await connection.getTransaction(signature,{commitment:'finalized',maxSupportedTransactionVersion:0}):null;
+  // The history lookup already fetched a matching finalized transaction.
+  // Reuse it so an unnecessary second RPC cannot obscure an available result.
+  const observed=signature?budget.observed.find(entry=>entry.signature===signature&&entry.result)?.result:null;
+  const result=observed??(signature?await connection.getTransaction(signature,{commitment:'finalized',maxSupportedTransactionVersion:0}):null);
   if(!result){
     const info=await connection.getAccountInfo(identity(c).commitment,'finalized');
     if(info){
       const current=await verifyState(c);
       if(current.status>0){
-        const settlement=await recoverSettlement(c,current.status,[],payload);
+        const settlement=await recoverSettlement(c,current.status,[],payload,budget);
         if(settlement?.matches_command&&settlement.action===action)return {state:'CONFIRMED',signature:settlement.signature,slot:settlement.slot};
         if(settlement&&action!=='DEPOSIT')return {state:'RECOVERED',settlement,command_status:'FAILED',reason:'SUPERSEDED_BY_VERIFIED_SETTLEMENT'};
         return {state:'PENDING',reason:'TERMINAL_HISTORY_UNAVAILABLE'};
@@ -240,7 +284,7 @@ export async function reconcile(c,action,payload,signature){
     const info=await connection.getAccountInfo(identity(c).commitment,'finalized');
     const current=info?await verifyState(c):null;
     if(current?.status>0){
-      const settlement=await recoverSettlement(c,current.status,[{signature,result}],payload);
+      const settlement=await recoverSettlement(c,current.status,[{signature,result}],payload,budget);
       if(settlement)return {state:'RECOVERED',settlement,command_status:'FAILED',reason:'SUPERSEDED_BY_VERIFIED_SETTLEMENT'};
       return {state:'PENDING',reason:'TERMINAL_HISTORY_UNAVAILABLE'};
     }
@@ -248,7 +292,7 @@ export async function reconcile(c,action,payload,signature){
   }
   const current=await verifyState(c);
   if(action==='DEPOSIT'&&current.status>0){
-    const settlement=await recoverSettlement(c,current.status,[{signature,result}]);
+    const settlement=await recoverSettlement(c,current.status,[{signature,result}],undefined,budget);
     if(!settlement)return {state:'PENDING',reason:'TERMINAL_HISTORY_UNAVAILABLE'};
     return {state:'CONFIRMED',signature,slot:result.slot,settlement};
   }

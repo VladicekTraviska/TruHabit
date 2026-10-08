@@ -210,3 +210,85 @@ test('an active state refresh does not scan transaction history or initiate a tr
   t.mock.method(connection,'sendRawTransaction',async()=>assert.fail('State refresh is read only'));
   assert.deepEqual(await reconcile(c,'STATE',{},null),{state:'ACTIVE',chain_status:0});
 });
+
+test('external terminal recovery paginates past later address-only transactions',async t=>{
+  chain(t,account(4));
+  // Anyone may credit a commitment with a lamport. Such a finalized transfer
+  // mentions its address, but cannot change the program's terminal state.
+  const signatures=[...Array.from({length:25},(_,i)=>({signature:`later-${i}`,err:null})),{signature:'external-settlement',err:null}];
+  const pages=[];
+  t.mock.method(connection,'getSignaturesForAddress',async(_address,options)=>{
+    pages.push(options.before??null);
+    const start=options.before?signatures.findIndex(s=>s.signature===options.before)+1:0;
+    return signatures.slice(start,start+options.limit);
+  });
+  t.mock.method(connection,'getTransaction',async signature=>{
+    if(signature==='external-settlement')return settlement(4,signature);
+    const noise=new Transaction({feePayer:other.publicKey,recentBlockhash:other.publicKey.toBase58()})
+      .add(SystemProgram.transfer({fromPubkey:other.publicKey,toPubkey:identity(c).commitment,lamports:1}));
+    return {transaction:{message:noise.compileMessage(),signatures:[signature]},slot:125,meta:{err:null}};
+  });
+  t.mock.method(connection,'sendRawTransaction',async()=>assert.fail('Terminal recovery must not broadcast'));
+  const result=await reconcile(c,'STATE',{},null);
+  assert.equal(result.state,'RECOVERED');
+  assert.equal(result.settlement.signature,'external-settlement');
+  assert.equal(result.settlement.action,'TIMEOUT');
+  assert.ok(pages.length>1,'History must request the next signature page');
+});
+
+test('an unknown submitted message is recovered from an older finalized page',async t=>{
+  chain(t,account());const tx=transaction();tx.sign(owner);const message=tx.compileMessage();
+  let originalReads=0;
+  const signatures=[...Array.from({length:22},(_,i)=>({signature:`later-${i}`,err:null})),{signature:'deposit-original',err:null}];
+  t.mock.method(connection,'getSignaturesForAddress',async(_address,options)=>{
+    const start=options.before?signatures.findIndex(s=>s.signature===options.before)+1:0;
+    return signatures.slice(start,start+options.limit);
+  });
+  t.mock.method(connection,'getTransaction',async signature=>{
+    if(signature!=='deposit-original')return null;
+    originalReads++;assert.equal(originalReads,1,'A matched finalized transaction must not be fetched twice');
+    return {transaction:{message,signatures:[signature]},meta:{err:null},slot:120};
+  });
+  const result=await reconcile(c,'DEPOSIT',{message:message.serialize().toString('base64')},null);
+  assert.equal(result.state,'CONFIRMED');assert.equal(result.signature,'deposit-original');assert.equal(result.slot,120);
+  assert.equal(originalReads,1);
+});
+
+test('history page exhaustion shares one finite budget and keeps terminal outcomes pending',async t=>{
+  chain(t,account(4));let pages=0,reads=0;
+  t.mock.method(connection,'getSignaturesForAddress',async(_address,options)=>{
+    pages++;assert.equal(options.limit,20);
+    return Array.from({length:20},(_,i)=>({signature:`page-${pages}-${i}`,err:null}));
+  });
+  t.mock.method(connection,'getTransaction',async()=>{reads++;return null;});
+  t.mock.method(connection,'sendRawTransaction',async()=>assert.fail('An exhausted search cannot broadcast'));
+  assert.equal((await reconcile(c,'SUCCESS',{message:'missing',last_valid_block_height:100},null)).state,'PENDING');
+  assert.equal(pages,5);assert.equal(reads,100);
+});
+
+test('an already observed external proof survives the shared history page limit',async t=>{
+  chain(t,account(4));let pages=0,reads=0;
+  t.mock.method(connection,'getSignaturesForAddress',async()=>{
+    pages++;return Array.from({length:20},(_,i)=>({signature:`page-${pages}-${i}`,err:null}));
+  });
+  t.mock.method(connection,'getTransaction',async signature=>{
+    reads++;return signature==='page-5-19'?settlement(4,signature):null;
+  });
+  const result=await reconcile(c,'SUCCESS',{message:'original-unknown',last_valid_block_height:100},null);
+  assert.equal(result.state,'RECOVERED');assert.equal(result.settlement.action,'TIMEOUT');
+  assert.equal(result.settlement.signature,'page-5-19');assert.equal(result.command_status,'FAILED');
+  assert.equal(pages,5);assert.equal(reads,100);
+});
+
+test('history time exhaustion aborts the actual RPC request and retains pending state',async t=>{
+  chain(t,account(4));t.mock.timers.enable({apis:['setTimeout']});
+  let signal,started;const requested=new Promise(resolve=>{started=resolve;});
+  t.mock.method(globalThis,'fetch',async(_url,options)=>{
+    signal=options.signal;started();
+    return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+  });
+  const pending=reconcile(c,'STATE',{},null);
+  await requested;t.mock.timers.tick(8000);
+  assert.deepEqual(await pending,{state:'PENDING',reason:'TERMINAL_HISTORY_UNAVAILABLE'});
+  assert.equal(signal.aborted,true);
+});

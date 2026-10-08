@@ -1,5 +1,6 @@
 // UI and known API messages. User names, company names and other user content are never translated.
 export const messages: Record<string, string> = {
+  'Účet má společnou historii firemních odměn. Smazání by poškodilo záznamy ostatních účastníků. Své údaje můžete stáhnout; vývojářský reset dovolí vyčistit jen vlastní nesdílená demo data.': 'This account has shared company reward history. Deletion would damage other participants’ records. You can download your data; developer reset can clear only your own unshared demo data.',
   'Váš osobní prostor': 'Your personal space', 'Zabezpečení a přístup': 'Security & access',
   'Nastavení pracovního prostoru': 'Workspace settings', 'Načítám pracovní prostor…': 'Loading workspace…',
   'Načítám historii…': 'Loading history…', 'Naplánovat běh': 'Plan a run', 'Kontrola': 'Review', 'Plán': 'Plan',

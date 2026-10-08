@@ -43,6 +43,7 @@ export function Business({ session, onExpired }: { session: Session; onExpired: 
     const errors: Record<string, string> = {
       INSUFFICIENT_SIMULATION_CREDITS: p('Not enough LOCAL test credits. Get credits in Challenges, or reduce the program size.', 'Nemáte dost LOCAL testovacích kreditů. Získejte kredity ve Výzvách nebo snižte velikost programu.'),
       INVALID_BUSINESS_TERMS: p('Check the reward and dates. A new-run program must start at least five minutes in the future.', 'Zkontrolujte odměnu a termíny. Program pro nový běh musí začínat alespoň za pět minut.'),
+      INVALID_BUSINESS_POINT_TERMS: p('Set a reward from 1 to 100,000 company points. Employer Match also requires a deposit from 1 to 100,000 points; other templates use no deposit. Reward × places must not exceed 10,000,000 points.', 'Odměna musí být od 1 do 100 000 firemních bodů. Spoluúčast vyžaduje také vklad od 1 do 100 000 bodů; ostatní šablony jsou bez vkladu. Odměna × počet míst nesmí překročit 10 000 000 bodů.'),
       INSUFFICIENT_COMPANY_POINTS: p('The company pool is too small. The owner can add demo points to the pool above, then try again.', 'Firemní pool nestačí. Vlastník může výše doplnit demo body do poolu a zkusit to znovu.'),
       INSUFFICIENT_EMPLOYEE_POINTS: p('You need previously earned company points for this voluntary deposit. Join a points-for-activity program first.', 'Pro tento dobrovolný vklad potřebujete už získané firemní body. Nejprve se zapojte do programu Body za aktivitu.'),
       BUSINESS_NEXT_CYCLE_EXISTS: p('The next monthly draft already exists. Open it from the program list.', 'Návrh dalšího měsíce už existuje. Otevřete jej ze seznamu programů.'),
@@ -73,8 +74,11 @@ export function Business({ session, onExpired }: { session: Session; onExpired: 
     errors.CLOSE_BUSINESS_PROGRAM_FIRST = p('Close the funded program before archiving.', 'Před archivací uzavřete financovaný program.');
     errors.FORBIDDEN = p('Your account does not have permission for this action.', 'Váš účet nemá oprávnění k této akci.');
     errors.NOT_FOUND = p('The record or invitation is unavailable for this account. Check the invitation email or refresh.', 'Záznam nebo pozvánka nejsou tomuto účtu dostupné. Zkontrolujte e-mail pozvánky nebo obnovte údaje.');
-    errors.FIT_SESSION_REQUIRED = errors.SELECT_FIT_SESSION = p('This FIT contains multiple sessions. Select its session index in the upload form.', 'FIT obsahuje více aktivit. Vyberte index ve formuláři nahrání.');
-    errors.INVALID_FIT_SESSION = p('This FIT session does not exist. Check the index.', 'Tato aktivita ve FIT neexistuje. Zkontrolujte index.');
+    errors.SELECT_FIT_SESSION = p('This FIT contains multiple sessions. Choose its activity number, starting at 1, then upload again.', 'FIT obsahuje více aktivit. Zvolte číslo aktivity od 1 a nahrajte znovu.');
+    errors.FIT_SESSION_REQUIRED = p('This FIT has no usable activity session. Export the original running activity from your device app.', 'FIT neobsahuje použitelnou aktivitu. Exportujte původní běžeckou aktivitu z aplikace zařízení.');
+    errors.INVALID_FIT_SESSION = p('This FIT activity number is not available. Choose an existing activity, starting at 1.', 'Toto číslo aktivity ve FIT není dostupné. Zvolte existující aktivitu, číslovanou od 1.');
+    errors.SESSION_NOT_APPLICABLE = p('Activity selection is only for FIT files. Select the GPX file again to clear the activity number.', 'Výběr aktivity je určený pouze pro FIT. Vyberte soubor GPX znovu pro vymazání čísla aktivity.');
+    errors.RUNNING_SESSION_REQUIRED = p('The selected FIT activity is not recorded as running. Choose the running activity or export a run.', 'Vybraná aktivita FIT není označená jako běh. Vyberte běžeckou aktivitu nebo exportujte běh.');
     errors.RATE_LIMITED = errors.UPLOAD_LIMIT_REACHED = p('The submission limit has been reached. Try later or start another program.', 'Limit nahrávání byl dosažen. Zkuste to později nebo vytvořte jiný program.');
     errors.PARSER_BUSY = p('Activity checking is busy. Retry in a moment.', 'Kontrola aktivit je vytížená. Zkuste to za chvíli.');
     errors.EXPECTED_GPX_OR_FIT = errors.EXPECTED_GPX_1_1 = p('Choose an original GPX 1.1 or FIT file.', 'Vyberte původní soubor GPX 1.1 nebo FIT.');

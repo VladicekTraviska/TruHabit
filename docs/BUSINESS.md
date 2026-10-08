@@ -64,6 +64,8 @@ Draft and closed programs can be archived. A workspace can be archived by its ow
 
 Permanent deletion requires the owner, exact workspace name, current password, no other members and no previously funded program or corporate point history. A workspace with financial history must use closure and archiving instead. The UI checks eligibility before offering the deletion form. Developer profile reset protects corporate point history shared with other accounts; see [Development](DEVELOPMENT.md).
 
+Account deletion also protects existing LEGACY company-credit movements, including a settled participant or former funder who has already left the workspace. These transfers contain paired accounting entries: deleting only one account's entries would corrupt the company's retained settlement history. Accounts with earned or pledged corporate points remain protected as well. This does not prevent an eligible participant from removing a settled private source file.
+
 ## Limits and integrity
 
 New point awards and Match pledges range from 1–100,000 integer points, with at most 10,000,000 points funded per program. Capacity, available company points and employee pledges are checked inside database transactions. Account and organization locks, program/enrollment locks and unique constraints prevent overspending and duplicate rewards. Every corporate point movement must balance to zero, including its issuance offset.

@@ -190,6 +190,9 @@ pub async fn update(
 ) -> Result<Json<Goal>, ApiError> {
     auth.csrf(&headers)?;
     let mut tx = state.pool.begin().await?;
+    // Match creation and account deletion: user before goal. Writing the goal
+    // event checks the actor FK, so reversing these locks can deadlock deletion.
+    lock_user(&mut tx, auth.user.id).await?;
     let old =
         sqlx::query_as::<_, Goal>("SELECT * FROM goals WHERE id=$1 AND user_id=$2 FOR UPDATE")
             .bind(id)
@@ -239,6 +242,7 @@ pub async fn archive(
 ) -> Result<Json<Goal>, ApiError> {
     auth.csrf(&headers)?;
     let mut tx = state.pool.begin().await?;
+    lock_user(&mut tx, auth.user.id).await?;
     let old =
         sqlx::query_as::<_, Goal>("SELECT * FROM goals WHERE id=$1 AND user_id=$2 FOR UPDATE")
             .bind(id)

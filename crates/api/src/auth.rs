@@ -585,10 +585,20 @@ pub async fn delete_account(
         return Err(ApiError::conflict("ACTIVE_BUSINESS_MUST_SETTLE"));
     }
     // Serialize against corporate awards before checking that deletion cannot
-    // orphan earned points or a voluntary pledge belonging to this employee.
+    // orphan earned points, pledges or retained legacy reward-transfer entries.
+    // A settled legacy participant may already have left the workspace, so its
+    // credit history must participate in locking independently of membership.
     sqlx::query_scalar::<_, Uuid>(
-        "SELECT o.id FROM organizations o WHERE EXISTS(SELECT 1 FROM organization_members m WHERE m.organization_id=o.id AND m.user_id=$1) OR EXISTS(SELECT 1 FROM business_point_movements m WHERE m.organization_id=o.id AND m.user_id=$1) ORDER BY o.id FOR UPDATE OF o",
+        "SELECT o.id FROM organizations o WHERE EXISTS(SELECT 1 FROM organization_members m WHERE m.organization_id=o.id AND m.user_id=$1) OR EXISTS(SELECT 1 FROM business_point_movements m WHERE m.organization_id=o.id AND m.user_id=$1) OR EXISTS(SELECT 1 FROM prototype_local_movements m JOIN company_programs p ON p.id=m.business_program_id WHERE p.organization_id=o.id AND m.user_id=$1) ORDER BY o.id FOR UPDATE OF o",
     ).bind(auth.user.id).fetch_all(&mut *tx).await?;
+    let has_shared_credit_history: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM prototype_local_movements WHERE user_id=$1 AND business_program_id IS NOT NULL)",
+    ).bind(auth.user.id).fetch_one(&mut *tx).await?;
+    if has_shared_credit_history {
+        // These rows cascade on account deletion. Removing only one side of a
+        // company reward would corrupt the accounting retained for its peers.
+        return Err(ApiError::conflict("ACCOUNT_HAS_SHARED_CREDIT_HISTORY"));
+    }
     let has_points: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM business_point_movements WHERE user_id=$1 GROUP BY organization_id HAVING sum(employee_delta)>0 OR sum(stake_delta)>0)",
     ).bind(auth.user.id).fetch_one(&mut *tx).await?;

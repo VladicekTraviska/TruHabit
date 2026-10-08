@@ -18,6 +18,140 @@ const REVIEW: &[u8] = include_bytes!("../../../web/public/prototype/review-run.g
 const SHORT: &[u8] = include_bytes!("../../../web/public/prototype/short-run.gpx");
 
 #[tokio::test]
+async fn deleting_a_settled_legacy_participant_cannot_erase_the_shared_reward_ledger() {
+    let t = TestApp::new().await;
+    let owner = t.account("legacy-history-owner@example.test").await;
+    let runner = t.account("legacy-history-runner@example.test").await;
+    let org = t.org(&owner).await;
+    t.member(org, &runner, "MEMBER").await;
+    t.grant(&owner).await;
+    let p = t.draft(org, &owner, 1).await;
+    t.publish(org, p, &owner).await;
+    let e = t.join(org, p, &runner).await;
+    let path = ep(org, p, e);
+    assert_eq!(
+        t.raw(&format!("{path}/upload"), VALID, &runner).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        t.req("POST", &format!("{path}/claim"), json!({}), &runner)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        t.req(
+            "POST",
+            &format!("{}/close", base(org, p)),
+            json!({"version":2}),
+            &owner
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    // Membership is not a financial-history guard: a settled legacy member can
+    // legitimately leave the workspace, while both sides of the reward must stay.
+    assert_eq!(
+        t.req(
+            "DELETE",
+            &format!("/api/organizations/{org}/members/{}", runner.user),
+            json!({}),
+            &owner
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let before: (i64, i64) = sqlx::query_as(
+        "SELECT count(*),COALESCE(sum(business_delta),0)::bigint FROM prototype_local_movements WHERE business_program_id=$1",
+    )
+    .bind(p)
+    .fetch_one(&t.pool)
+    .await
+    .unwrap();
+    assert_eq!(before, (4, 0));
+    let deletion = t
+        .req(
+            "DELETE",
+            "/api/account",
+            json!({"password":PASSWORD,"confirmation":"DELETE"}),
+            &runner,
+        )
+        .await;
+    let after: (i64, i64) = sqlx::query_as(
+        "SELECT count(*),COALESCE(sum(business_delta),0)::bigint FROM prototype_local_movements WHERE business_program_id=$1",
+    )
+    .bind(p)
+    .fetch_one(&t.pool)
+    .await
+    .unwrap();
+    let still_signed_in = t
+        .req("GET", "/api/auth/session", Value::Null, &runner)
+        .await;
+    assert_eq!(
+        (deletion.0, after),
+        (StatusCode::CONFLICT, before),
+        "Deleting the employee must preserve both reward-transfer entries; response: {}",
+        deletion.1
+    );
+    assert_eq!(deletion.1["error"], "ACCOUNT_HAS_SHARED_CREDIT_HISTORY");
+    assert_eq!(still_signed_in.0, StatusCode::OK);
+    // The funding side is equally important. After a legitimate ownership
+    // transfer and departure, the former owner must not erase funding/payment
+    // rows that are paired with the employee's retained reward.
+    t.member(org, &runner, "MEMBER").await;
+    assert_eq!(
+        t.req(
+            "POST",
+            &format!("/api/organizations/{org}/transfer-owner"),
+            json!({"user_id":runner.user,"version":1}),
+            &owner
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        t.req(
+            "DELETE",
+            &format!("/api/organizations/{org}/members/{}", owner.user),
+            json!({}),
+            &runner
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let funder_deletion = t
+        .req(
+            "DELETE",
+            "/api/account",
+            json!({"password":PASSWORD,"confirmation":"DELETE"}),
+            &owner,
+        )
+        .await;
+    let final_ledger: (i64, i64) = sqlx::query_as(
+        "SELECT count(*),COALESCE(sum(business_delta),0)::bigint FROM prototype_local_movements WHERE business_program_id=$1",
+    )
+    .bind(p)
+    .fetch_one(&t.pool)
+    .await
+    .unwrap();
+    t.finish().await;
+    assert_eq!(
+        (funder_deletion.0, final_ledger),
+        (StatusCode::CONFLICT, before),
+        "Former funder deletion must retain the complete shared ledger: {}",
+        funder_deletion.1
+    );
+    assert_eq!(
+        funder_deletion.1["error"],
+        "ACCOUNT_HAS_SHARED_CREDIT_HISTORY"
+    );
+}
+
+#[tokio::test]
 async fn settled_workspace_archive_and_restore_preserve_private_evidence_and_ledger() {
     let t = TestApp::new().await;
     let owner = t.account("archive-owner@example.test").await;

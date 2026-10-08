@@ -98,6 +98,13 @@ export function App() {
     { id: 'account' as const, label: p('My account', 'Můj účet'), icon: UserCircle },
   ];
   const signedIn = !!session && !link;
+  const pageLabel = pages.find(item => item.id === page)?.label;
+  const title = loading
+    ? p('Loading…', 'Načítání…')
+    : link
+      ? link.purpose === 'verify_email' ? t('Potvrďte svůj e-mail') : t('Nové heslo')
+      : signedIn ? pageLabel : p('Account access', 'Přístup k účtu');
+  useEffect(() => { document.title = `TruHabit · ${title}`; }, [title]);
   const sessionKey = session ? `${session.user.id}:${session.csrf_token}:${dataRevision}` : '';
   const sessionEnded = () => {
     if (session && mounted.current && currentSession.current?.user.id === session.user.id && currentSession.current.csrf_token === session.csrf_token) signedOut();
@@ -109,7 +116,7 @@ export function App() {
       <div className="sidebar-bottom"><div className="sidebar-promise"><ShieldCheck size={24} weight="duotone" aria-hidden="true" /><strong>{p('Small steps. Kept promises.', 'Malé kroky. Splněné sliby.')}</strong><p>{p('Your pace. Your commitment.', 'Vaše tempo. Váš závazek.')}</p></div><button className="sidebar-user" onClick={() => navigate('account')}><span className="avatar">{session.user.display_name.slice(0, 1).toUpperCase()}</span><span><strong>{session.user.display_name}</strong><small>{p('Personal account', 'Osobní účet')}</small></span><CaretRight size={16} aria-hidden="true" /></button></div>
     </aside>}
     <div className="app-content">
-      <header className="app-topbar"><div className="topbar-context">{signedIn ? <><span className="topbar-brand" translate="no">TruHabit</span><CaretRight size={13} aria-hidden="true" /><span>{pages.find(item => item.id === page)?.label}</span></> : <Brand />}</div><div className="topbar-actions">{signedIn&&<ProductHelp view={page}/>}<span className="environment-chip"><span aria-hidden="true" />{p('Test environment', 'Testovací prostředí')}</span><label className="language-select"><Globe size={18} aria-hidden="true" /><span className="sr-only">{p('Language', 'Jazyk')}</span><select value={language} onChange={e => setLanguage(e.target.value === 'cs' ? 'cs' : 'en')}><option value="en">English</option><option value="cs">Čeština</option></select></label></div></header>
+      <header className="app-topbar"><div className="topbar-context">{signedIn ? <><span className="topbar-brand" translate="no">TruHabit</span><CaretRight size={13} aria-hidden="true" /><span>{pageLabel}</span></> : <Brand />}</div><div className="topbar-actions">{signedIn&&<ProductHelp view={page}/>}<span className="environment-chip"><span aria-hidden="true" />{p('Test environment', 'Testovací prostředí')}</span><label className="language-select"><Globe size={18} aria-hidden="true" /><span className="sr-only">{p('Language', 'Jazyk')}</span><select value={language} onChange={e => setLanguage(e.target.value === 'cs' ? 'cs' : 'en')}><option value="en">English</option><option value="cs">Čeština</option></select></label></div></header>
       <main ref={main} className="wrap product-main" id="main" tabIndex={-1}>
         {error && <Message error><strong>{t('Aplikace není dostupná.')}</strong><span>{t(error)}</span><button className="button secondary" onClick={() => void load()}>{t('Zkusit znovu')}</button></Message>}
         {loading ? <div className="page-skeleton" role="status" aria-label={t('Načítám váš účet…')}><span>{t('Načítám váš účet…')}</span><div /><div /><div /></div> : !signedIn ? <AuthPanel onLogin={load} link={link} onDismissLink={() => setLink(null)} emailAvailable={readiness?.email_delivery ?? false} /> : readiness && <>

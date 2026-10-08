@@ -3149,6 +3149,118 @@ async fn export_excludes_credentials_and_deletion_cascades_only_own_data() {
     t.finish().await;
 }
 
+#[tokio::test]
+async fn account_deletion_during_a_goal_edit_or_archive_never_deadlocks() {
+    for archive in [false, true] {
+        let t = std::sync::Arc::new(TestApp::new(false).await);
+        let s = t.account("goal-deletion-race@example.test").await;
+        let goal = t.goal(&s, &Uuid::new_v4().to_string()).await;
+        let path = format!(
+            "/api/goals/{}{}",
+            goal["id"].as_str().unwrap(),
+            if archive { "/archive" } else { "" }
+        );
+        let update = if archive {
+            json!({"version":1})
+        } else {
+            json!({"version":1,"target_m":3000,"pledge_cents":1000,"starts_at":Utc::now()+Duration::hours(1)})
+        };
+        // Pause the real mutation after it owns the goal row, making the
+        // edit/delete interleaving deterministic. This trigger and advisory
+        // lock exist only in this test's disposable schema.
+        let key = (Uuid::new_v4().as_u128() & (i64::MAX as u128)) as i64;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "CREATE FUNCTION pause_goal_mutation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock({key}); RETURN NEW; END $$"
+        )))
+        .execute(&t.pool)
+        .await
+        .unwrap();
+        sqlx::query("CREATE TRIGGER pause_goal_mutation BEFORE UPDATE ON goals FOR EACH ROW EXECUTE FUNCTION pause_goal_mutation()")
+            .execute(&t.pool).await.unwrap();
+        let mut pause = t.pool.begin().await.unwrap();
+        sqlx::query("SELECT pg_advisory_xact_lock($1)")
+            .bind(key)
+            .execute(&mut *pause)
+            .await
+            .unwrap();
+        let mutation = {
+            let t = t.clone();
+            let s = s.clone();
+            tokio::spawn(async move {
+                t.request(
+                    if archive { "POST" } else { "PATCH" },
+                    &path,
+                    update,
+                    Some(&s),
+                    None,
+                )
+                .await
+            })
+        };
+        let editing = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND query LIKE 'UPDATE goals SET%' AND state='active' AND wait_event_type='Lock')")
+                    .bind(&t.schema).fetch_one(&t.pool).await.unwrap();
+                if blocked {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        let deletion = {
+            let t = t.clone();
+            tokio::spawn(async move {
+                t.request(
+                    "DELETE",
+                    "/api/account",
+                    json!({"confirmation":"DELETE","password":PASSWORD}),
+                    Some(&s),
+                    None,
+                )
+                .await
+            })
+        };
+        let deleting = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND (query LIKE 'DELETE FROM users%' OR query LIKE 'SELECT password_hash FROM users%') AND state='active' AND wait_event_type='Lock')")
+                    .bind(&t.schema).fetch_one(&t.pool).await.unwrap();
+                if blocked {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        pause.commit().await.unwrap();
+        let (edited, deleted) = tokio::time::timeout(std::time::Duration::from_secs(8), async {
+            tokio::join!(mutation, deletion)
+        })
+        .await
+        .expect("Goal edit and account deletion must finish without a lock cycle");
+        let edited = edited.unwrap();
+        let deleted = deleted.unwrap();
+        let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
+            .fetch_one(&t.pool)
+            .await
+            .unwrap();
+        let t = match std::sync::Arc::try_unwrap(t) {
+            Ok(t) => t,
+            Err(_) => panic!("Concurrent requests retained the test app"),
+        };
+        t.finish().await;
+        assert!(editing.is_ok(), "Goal mutation did not reach its pause");
+        assert!(deleting.is_ok(), "Account deletion did not reach its lock");
+        assert_eq!(
+            (edited.0, deleted.0, remaining),
+            (StatusCode::OK, StatusCode::OK, 0),
+            "archive={archive}; edit={}, delete={}",
+            edited.1,
+            deleted.1
+        );
+    }
+}
+
 #[test]
 fn authenticated_mail_encryption_rejects_tampering_and_swapped_job_identity() {
     let id = Uuid::new_v4();

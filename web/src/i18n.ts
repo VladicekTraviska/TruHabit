@@ -14,7 +14,6 @@ export function t(text: string): string {
 export function setLanguage(value: Language) {
   language = value;
   document.documentElement.lang = value;
-  document.title = value === 'en' ? 'TruHabit · Your goals' : 'TruHabit · Vaše cíle';
   try { localStorage.setItem('truhabit.language', value); } catch { /* Still works for this session. */ }
   listeners.forEach(listener => listener());
 }

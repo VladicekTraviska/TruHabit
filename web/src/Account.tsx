@@ -81,7 +81,9 @@ export function Account({
       await action();
     } catch (e) {
       if (active()) {
-        setError(e instanceof Error ? e.message : t("Operace se nepodařila."));
+        setError(e instanceof ApiError && e.message === 'ACCOUNT_HAS_SHARED_CREDIT_HISTORY'
+          ? t('Účet má společnou historii firemních odměn. Smazání by poškodilo záznamy ostatních účastníků. Své údaje můžete stáhnout; vývojářský reset dovolí vyčistit jen vlastní nesdílená demo data.')
+          : e instanceof Error ? e.message : t("Operace se nepodařila."));
         if (e instanceof ApiError && e.code === 'UNAUTHORIZED') onSignedOut();
       }
     } finally {

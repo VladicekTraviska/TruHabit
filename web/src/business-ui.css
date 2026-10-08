@@ -107,3 +107,4 @@
   .company-local-note { padding:15px; }
   .company-section-title { align-items:flex-start; }
 }
+.company-budget-check{margin:-8px 0 22px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:#f5f9f5;color:var(--green)}.company-budget-check>div{display:flex;align-items:flex-start;gap:10px}.company-budget-check svg{flex-shrink:0;margin-top:2px}.company-budget-check p{margin:0;min-width:0;font-size:12px;line-height:1.7}.company-budget-check strong,.company-budget-check span{display:block}.company-budget-check span{color:var(--muted)}.company-budget-check meter{width:100%;height:8px;margin-top:12px;accent-color:var(--green)}.company-budget-check.over-limit{background:#fff3ef;border-color:#edc6b9;color:#963a22}.company-budget-check.over-limit span{color:#7b5147}.company-budget-check.over-limit meter{accent-color:#963a22}
