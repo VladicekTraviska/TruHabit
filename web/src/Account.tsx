@@ -1,12 +1,13 @@
-import { t } from './i18n';
+import { getLanguage, t } from './i18n';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError } from './api';
 import type { Readiness, Session } from './types';
 import { date } from './types';
 import { Field, Message, PasswordField } from './components';
-import { UserCircle, Wallet, ShieldCheck, DownloadSimple, SignOut, Trash, CaretDown, CheckCircle } from '@phosphor-icons/react';
+import { UserCircle, Wallet, ShieldCheck, DownloadSimple, SignOut, Trash, CaretDown, CaretRight, CheckCircle, LockKey } from '@phosphor-icons/react';
 import './sections-ui.css';
+import './auth-account.css';
 import { DeveloperReset } from './DeveloperReset';
 
 interface SolanaProvider {
@@ -41,6 +42,7 @@ export function Account({
   onSignedOut: () => void;
   onDataReset: (userId: string, csrfToken: string) => Promise<void>;
 }) {
+  const p = (en: string, cs: string) => getLanguage() === 'en' ? en : cs;
   const [accountBusy, setBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const resetInFlight = useRef(false);
@@ -231,14 +233,25 @@ export function Account({
       {notice && <Message>{notice}</Message>}
       <div className="account-identity">
         <span className="identity-avatar" aria-hidden="true">{session.user.display_name.slice(0, 1).toUpperCase()}</span>
-        <div><strong>{session.user.display_name}</strong><span>{session.user.email}</span></div>
+        <div><strong>{session.user.display_name}</strong><span>{session.user.email}</span><small>{t("Účet vytvořen")} {date(session.user.created_at)}</small></div>
         <span className={`badge ${session.user.email_verified_at ? 'success' : ''}`}><CheckCircle size={15} aria-hidden="true" />{session.user.email_verified_at ? t('E-mail ověřený') : t('E-mail zatím neověřený')}</span>
       </div>
+      <div className="account-settings-layout">
+      <nav className="account-section-index" aria-label={p('Account settings', 'Nastavení účtu')}>
+        <p className="eyebrow">{p('SETTINGS', 'NASTAVENÍ')}</p>
+        <a href="#account-profile"><UserCircle size={20} aria-hidden="true" /><span>{t('Profil')}</span><CaretRight size={15} aria-hidden="true" /></a>
+        <a href="#account-wallet"><Wallet size={20} aria-hidden="true" /><span>{p('Wallet', 'Peněženka')}</span><CaretRight size={15} aria-hidden="true" /></a>
+        <a href="#account-security"><LockKey size={20} aria-hidden="true" /><span>{p('Security', 'Zabezpečení')}</span><CaretRight size={15} aria-hidden="true" /></a>
+        <a href="#account-privacy"><ShieldCheck size={20} aria-hidden="true" /><span>{p('Privacy & data', 'Soukromí a data')}</span><CaretRight size={15} aria-hidden="true" /></a>
+        <div className="account-index-note"><ShieldCheck size={20} aria-hidden="true" /><p>{p('Your account. Your information. Your choice.', 'Váš účet. Vaše údaje. Vaše rozhodnutí.')}</p></div>
+      </nav>
+      <div className="account-settings-content">
       <div className="settings-grid">
-        <section className="panel settings-card">
-          <div className="settings-card-heading"><span className="section-icon"><UserCircle size={23} aria-hidden="true" /></span><div><p className="eyebrow">{t("PROFIL")}</p><h2>{t("Jak vám máme říkat?")}</h2></div></div>
+        <section id="account-profile" className="panel settings-card" tabIndex={-1}>
+          <div className="settings-card-heading"><span className="section-icon"><UserCircle size={23} aria-hidden="true" /></span><div><p className="eyebrow">{t("PROFIL")}</p><h2>{p('Your profile details', 'Údaje vašeho profilu')}</h2></div></div>
           <form onSubmit={profile}>
             <fieldset disabled={busy}>
+              <div className="account-profile-fields">
               <Field label={t("Jméno")}>
                 <input
                   name="display_name"
@@ -251,10 +264,8 @@ export function Account({
               <Field label={t("E-mail")}>
                 <input value={session.user.email} readOnly type="email" />
               </Field>
+              </div>
               <div className="email-state">
-                <span className={`badge ${session.user.email_verified_at ? 'success' : ''}`}>
-                  {session.user.email_verified_at ? t("E-mail ověřený") : t("E-mail zatím neověřený")}
-                </span>
                 {!session.user.email_verified_at && (
                   <button
                     type="button"
@@ -275,10 +286,10 @@ export function Account({
               <button className="button primary" disabled={busy}>{busy ? t('Ukládám…') : t("Uložit profil")} </button>
             </fieldset>
           </form>
-          <p className="field-hint">{t("Účet vytvořen")} {date(session.user.created_at)}.</p>
         </section>
-        <section className="panel settings-card">
+        <section id="account-wallet" className="panel settings-card" tabIndex={-1}>
           <div className="settings-card-heading"><span className="section-icon"><Wallet size={23} aria-hidden="true" /></span><div><p className="eyebrow">{t("SOLANA PENĚŽENKA")}</p><h2>{t("Vaše adresa. Váš podpis.")}</h2></div></div>
+          <div className="account-wallet-context"><span className="badge">{p('Optional', 'Volitelné')}</span><p>{p('Use Phantom for personal Devnet challenges. Team programs work without a wallet.', 'Phantom využijete pro osobní výzvy na Devnetu. Týmové programy fungují bez peněženky.')}</p></div>
           <p className="body-copy">{t("Propojení ověří, že adresu ovládáte. Podepisujete jednorázovou zprávu pro tento účet, nikoli převod peněz.")} </p>
           {session.wallet ? (
             <>
@@ -301,7 +312,7 @@ export function Account({
           )}
           <p className="field-hint">{t("Propojení nebo odpojení vyžaduje přihlášení v posledních 15 minutách. Skutečné platby nejsou zapnuté.")} </p>
         </section>
-        <section className="panel settings-card">
+        <section id="account-security" className="panel settings-card" tabIndex={-1}>
           <div className="settings-card-heading"><span className="section-icon"><ShieldCheck size={23} aria-hidden="true" /></span><div><p className="eyebrow">{t("ZABEZPEČENÍ")}</p><h2>{t('Security & access')}</h2></div></div>
           <details className="section-disclosure">
           <summary><span>{t('Change your password')}</span><CaretDown size={17} aria-hidden="true" /></summary>
@@ -322,9 +333,9 @@ export function Account({
           </form>
           </div>
           </details>
-          <div className="settings-action-row"><div><strong>{t('Odhlásit všechna zařízení')}</strong></div><button className="button secondary icon-action" title={t('Odhlásit všechna zařízení')} aria-label={t('Odhlásit všechna zařízení')} disabled={busy} onClick={() => void run(async () => { await api('/api/auth/logout-all', { method: 'POST', body: {} }); onSignedOut(); })}><SignOut size={20} aria-hidden="true" /></button></div>
+          <div className="settings-action-row"><div><strong>{p('Active sessions', 'Aktivní přihlášení')}</strong><p>{p('End every sign-in, including this device.', 'Ukončí všechna přihlášení, včetně tohoto zařízení.')}</p></div><button className="button secondary" disabled={busy} onClick={() => void run(async () => { await api('/api/auth/logout-all', { method: 'POST', body: {} }); onSignedOut(); })}><SignOut size={18} aria-hidden="true" />{t('Odhlásit všechna zařízení')}</button></div>
         </section>
-        <section className="panel settings-card">
+        <section id="account-privacy" className="panel settings-card" tabIndex={-1}>
           <div className="settings-card-heading"><span className="section-icon"><DownloadSimple size={23} aria-hidden="true" /></span><div><p className="eyebrow">{t("PŘÍSTUP A SOUKROMÍ")}</p><h2>{t("Mějte účet pod kontrolou.")}</h2></div></div>
           <p className="body-copy">{t("Export obsahuje údaje vašeho účtu, cíle, jejich historii, propojenou adresu peněženky a záznamy zabezpečení.")} </p>
           <div className="stack-actions">
@@ -371,6 +382,8 @@ export function Account({
         </section>
       </div>
       {readiness.dev_reset && <DeveloperReset key={session.user.id} session={session} disabled={accountBusy} onReset={resetComplete} onBusyChange={resetBusyChanged} onExpired={onSignedOut} />}
+      </div>
+      </div>
     </div>
   );
 }

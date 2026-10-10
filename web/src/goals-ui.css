@@ -1,0 +1,139 @@
+/* A personal plan is deliberately separate from an activated stake. */
+.goals-page.sections-page{color:var(--ink)}
+.goals-page.sections-page .product-heading{align-items:center;padding:23px 0 29px}
+.goals-page.sections-page .product-heading h1{font-size:clamp(34px,3.1vw,43px);font-weight:720;line-height:1.12;margin:0 0 14px}
+.goals-page.sections-page .product-heading .lead{font-size:15px;line-height:1.75;max-width:610px;margin:0}
+.goals-page .eyebrow{font-size:11px;line-height:1.6;letter-spacing:.13em;color:var(--muted)}
+.goals-page.sections-page .sections-availability{border-color:var(--line);background:var(--pale);border-radius:11px;margin-bottom:29px;padding-inline:19px}
+.goals-page .sections-availability>summary{min-height:55px;gap:11px}
+.goals-page .sections-availability>summary>strong{font-size:14px;line-height:1.6}
+.goals-page.sections-page .sections-availability>p{font-size:13px;line-height:1.7;padding-bottom:18px}
+.goals-page .section-title{display:flex;justify-content:space-between;align-items:center;gap:20px;margin:26px 0 23px}
+.goals-page .section-title h2{font-size:23px;line-height:1.3;font-weight:700;margin:0}
+.goals-page .filter-buttons{padding:4px;border-radius:10px;background:#e9eee6}
+.goals-page.sections-page .filter-buttons button{min-height:44px;padding:8px 15px;border-radius:7px;font-size:13px;line-height:1.5;font-weight:650;color:var(--muted)}
+.goals-page .filter-buttons button[aria-pressed=true]{color:var(--green);background:var(--surface);box-shadow:0 1px 3px #1729230b}
+.goals-page .goals-layout{grid-template-columns:minmax(0,1.15fr) minmax(310px,1fr);gap:24px;align-items:start}
+.goals-page .goal-cards{grid-template-columns:minmax(0,1fr);gap:15px}
+.goals-page.sections-page .panel.goal-card{display:grid;grid-template-columns:minmax(0,1fr) auto;width:100%;position:relative;gap:0 18px;padding:24px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;box-shadow:none;transition:border-color .18s,box-shadow .18s}
+.goals-page .goal-card:hover:not(:disabled){border-color:#9caf95;box-shadow:0 4px 16px #123b3208}
+.goals-page .goal-card.selected{border-color:#7c9661;background:#fbfdf6;box-shadow:inset 4px 0 0 #aeca5a}
+.goals-page .goal-card-top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:23px}
+.goals-page .goal-type{display:flex;align-items:center;gap:8px;color:var(--green)}
+.goals-page .goal-card-top .eyebrow{margin:0;font-size:11px}
+.goals-page .goal-card-top .badge{font-size:12px}
+.goals-page .goal-card>strong{grid-column:1;margin:0;font-size:40px;font-weight:700;line-height:1.1;color:var(--ink);font-variant-numeric:tabular-nums}
+.goals-page .goal-card>strong>span{font-size:17px;color:var(--muted);font-weight:450}
+.goals-page .goal-card>p{grid-column:1;display:flex;align-items:center;gap:7px;font-size:13px;line-height:1.65;margin:12px 0 0;color:var(--muted)}
+.goals-page .goal-card-bottom{grid-column:2;grid-row:2/4;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:11px;margin:0;padding:0;border:0}
+.goals-page .goal-card-bottom>span:first-child{text-align:right;color:var(--muted);font-size:12px;line-height:1.5}
+.goals-page .goal-card-bottom b{display:block;color:var(--green);font-size:16px;line-height:1.5;font-weight:650;margin-top:7px;font-variant-numeric:tabular-nums}
+.goals-page .goal-card-bottom>span:last-child{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--lime);color:var(--green)}
+.goals-page.sections-page .panel.goal-detail{position:sticky;top:24px;padding:28px;border:1px solid var(--line);border-radius:var(--radius);box-shadow:none}
+.goals-page .goal-detail>.section-icon{background:var(--lime);border-radius:12px;margin-bottom:23px}
+.goals-page .goal-detail>.eyebrow{font-size:11px;margin-bottom:10px}
+.goals-page .goal-detail h2{font-size:29px;line-height:1.22;letter-spacing:-.035em;font-weight:700}
+.goals-page.sections-page .body-copy{font-size:14px;line-height:1.75;color:var(--muted)}
+.goals-page.sections-page .detail-facts{grid-template-columns:minmax(0,.9fr) minmax(0,1.25fr);font-size:14px;line-height:1.7;gap:15px 18px}
+.goals-page .detail-facts dt{color:var(--muted)}
+.goals-page .detail-facts dd{color:var(--ink);font-weight:550;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.goals-page .detail-actions{gap:10px;margin-top:23px}
+.goals-page .section-disclosure>summary{font-size:14px;min-height:56px}
+.goals-page.sections-page .section-disclosure .note{font-size:14px;line-height:1.75}
+.goals-page .goal-detail .history-title{font-size:16px;margin-top:23px;padding-top:22px}
+.goals-page .timeline-item time{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.goals-page .timeline-item p{font-size:14px;line-height:1.65;color:var(--ink)}
+.goals-page .timeline-dot{background:#aeca5a;border-color:#aeca5a}
+.goals-page .goal-intro-art{height:90px;display:flex;align-items:center;justify-content:flex-start;gap:18px;color:var(--green);margin:0 0 24px}
+.goals-page .goal-intro-art>svg{width:54px;height:54px;padding:10px;background:var(--lime);border-radius:50%}
+.goals-page .goal-intro-art>span{display:none}
+.goals-page.sections-page .panel.empty-state{align-items:flex-start;text-align:left;padding:38px 32px;min-height:325px;border-style:dashed;border-color:#becdb3;background:#ffffff80;box-shadow:none}
+.goals-page .empty-state .empty-symbol{background:var(--lime);color:var(--green);width:58px;height:58px;border-radius:50%;margin:0 0 20px}
+.goals-page .empty-state h3{font-size:25px;line-height:1.3;font-weight:700;max-width:400px;margin:0 0 13px}
+.goals-page .empty-state p{color:var(--muted);font-size:15px;line-height:1.75;max-width:400px}
+.goals-page .empty-state .button{margin-top:10px}
+.goals-page .goals-load-more{justify-self:start;margin:8px 0}
+.goals-page.goals-empty .goal-detail:has(.goal-intro-art){border:0;background:transparent;padding:24px 9px 24px 20px}
+.goals-page .steps{display:grid;gap:17px;margin:25px 0}
+.goals-page .steps p{display:flex;align-items:flex-start;gap:15px;color:var(--ink);font-size:14px;line-height:1.65;margin:0}
+.goals-page .steps b{font-size:12px;min-width:25px;color:#6b8257}
+.goals-page .field-hint{font-size:13px;line-height:1.7;color:var(--muted)}
+.goals-page .create-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:24px;align-items:start}
+.goals-page.sections-page .panel.create-form{padding:31px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:none}
+.goals-page.sections-page .create-form h2{font-size:30px;line-height:1.2;font-weight:700;letter-spacing:-.035em;margin:0 0 28px}
+.goals-page .create-form fieldset{padding:0;border:0;margin:0 0 29px;min-width:0}
+.goals-page .create-form legend{font-size:15px;line-height:1.55;font-weight:650;color:var(--ink);margin-bottom:15px}
+.goals-page .form-stepper{display:flex;gap:22px;margin:18px 0 28px;padding:0;list-style:none}
+.goals-page .form-stepper li{display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.5;color:var(--muted)}
+.goals-page .form-stepper li+li::before{width:27px;margin-right:3px}
+.goals-page .form-stepper li>span{width:28px;height:28px;font-size:12px;border-color:#cbd6c5;background:#f2f5ee}
+.goals-page .form-stepper li.current,.goals-page .form-stepper li.complete{color:var(--green);font-weight:650}
+.goals-page .form-stepper li.current>span,.goals-page .form-stepper li.complete>span{color:var(--green);background:var(--lime);border-color:#b7cc65}
+.goals-page .choice-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.goals-page .choice{position:relative;min-width:0;padding:19px 14px;margin:0;border:1px solid var(--line);border-radius:10px;background:#fff}
+.goals-page .choice.chosen{color:var(--green);border-color:#b7cb75;background:#f1f6df;box-shadow:none}
+.goals-page .choice strong{font-size:34px;font-weight:700;line-height:1.2;color:var(--ink);font-variant-numeric:tabular-nums}
+.goals-page .choice strong>span{font-size:15px;font-weight:450}
+.goals-page .choice small{font-size:12px;line-height:1.6;color:var(--muted)}
+.goals-page .choice input,.goals-page .amount-choice input{accent-color:var(--green)}
+.goals-page .amount-row{display:flex;gap:10px;flex-wrap:wrap}
+.goals-page .amount-choice{display:flex;align-items:center;justify-content:center;gap:8px;flex:1 1 92px;padding:13px 12px;min-height:48px;border:1px solid var(--line);border-radius:9px;color:var(--ink);background:#fff;font-size:14px;text-align:center;font-variant-numeric:tabular-nums}
+.goals-page .amount-choice.chosen{color:var(--green);border-color:#aabd73;background:#f1f6df}
+.goals-page.sections-page .product-field>span{font-size:14px;line-height:1.55;font-weight:650}
+.goals-page.sections-page .product-field input{font-size:16px;min-height:48px;padding:11px 13px;border-color:#c9d4c7}
+.goals-page.sections-page .product-field small{font-size:13px;line-height:1.65}
+.goals-page.sections-page .how-card{border:0;border-radius:var(--radius);background:var(--green);padding:31px 28px;color:#fff}
+.goals-page .how-card .eyebrow{color:#d4e2c8}
+.goals-page .how-card h3{color:#fff;font-size:29px;line-height:1.2;margin-bottom:21px}
+.goals-page.sections-page .how-card .body-copy{color:#d3dfd2;font-size:14px;line-height:1.75}
+.goals-page .how-card .goal-intro-art{margin-bottom:23px;height:67px}
+.goals-page .how-bottom{margin-top:27px;padding-top:20px;border-top:1px solid #58776a;color:#d3dfd2;font-size:13px;line-height:1.7}
+.goals-page .how-bottom p{margin:0}
+.goals-page .goal-review-facts{padding-block:7px}
+.goals-page .form-actions{gap:11px;margin-top:25px}
+.goals-page .create-form .note{font-size:14px;line-height:1.75;background:var(--pale);border-color:var(--line)}
+.goals-page .section-loading{font-size:14px;min-height:175px}
+@media(max-width:1200px){
+  .goals-page .goals-layout{grid-template-columns:minmax(0,1fr) minmax(280px,1fr);gap:20px}
+  .goals-page.sections-page .panel.goal-card{padding:22px}
+  .goals-page .goal-card-bottom{grid-row:4;grid-column:1/-1;align-items:center;flex-direction:row;padding-top:16px;margin-top:18px;border-top:1px solid var(--line)}
+  .goals-page .goal-card-bottom>span:first-child{text-align:left}
+  .goals-page .create-layout{grid-template-columns:minmax(0,1.6fr) minmax(240px,1fr);gap:20px}
+  .goals-page.sections-page .panel.create-form,.goals-page.sections-page .how-card{padding:26px}
+}
+@media(max-width:960px){
+  .goals-page .goals-layout,.goals-page .create-layout{grid-template-columns:minmax(0,1fr)}
+  .goals-page.sections-page .panel.goal-detail{position:static}
+  .goals-page .how-card{display:none}
+  .goals-page.goals-empty .goal-detail:has(.goal-intro-art){padding:23px 4px 4px}
+  .goals-page .goal-card-bottom{grid-row:2/4;grid-column:2;align-items:flex-end;flex-direction:column;padding:0;margin:0;border:0}
+  .goals-page .goal-card-bottom>span:first-child{text-align:right}
+}
+@media(max-width:650px){
+  .goals-page.sections-page .product-heading{align-items:flex-start;flex-direction:column;gap:21px;padding:13px 0 27px}
+  .goals-page.sections-page .product-heading h1{font-size:34px}
+  .goals-page.sections-page .product-heading .lead{font-size:14px}
+  .goals-page .section-title{flex-wrap:wrap;gap:16px;margin:24px 0 21px}
+  .goals-page .section-title h2{font-size:22px}
+  .goals-page.sections-page .filter-buttons button{min-height:44px;padding:8px 13px;font-size:13px}
+  .goals-page .goal-card-top{gap:12px;flex-wrap:wrap}
+  .goals-page .goal-card>strong{font-size:39px}
+  .goals-page .goal-card-bottom{grid-row:4;grid-column:1/-1;align-items:center;flex-direction:row;padding-top:16px;margin-top:18px;border-top:1px solid var(--line)}
+  .goals-page .goal-card-bottom>span:first-child{text-align:left}
+  .goals-page.sections-page .panel.goal-detail,.goals-page.sections-page .panel.create-form{padding:25px 21px}
+  .goals-page .goal-detail h2,.goals-page.sections-page .create-form h2{font-size:28px}
+  .goals-page.sections-page .detail-facts{grid-template-columns:minmax(0,1fr);gap:6px}
+  .goals-page .detail-facts dd{text-align:left;margin:0 0 12px}
+  .goals-page .detail-actions{flex-wrap:wrap}
+  .goals-page .detail-actions .button{flex:1}
+  .goals-page.sections-page .panel.empty-state{padding:32px 25px;min-height:310px}
+  .goals-page .empty-state h3{font-size:25px}
+  .goals-page .choice-row{gap:8px}
+  .goals-page .choice{padding:18px 11px}
+  .goals-page .choice strong{font-size:30px}
+  .goals-page .choice small{font-size:12px}
+  .goals-page .amount-choice{flex:1 1 105px}
+  .goals-page .form-actions .button.primary{width:100%;justify-content:center}
+  .goals-page .form-actions .text-button{padding-inline:0}
+}
+@media(prefers-reduced-motion:reduce){.goals-page .goal-card{transition:none}}

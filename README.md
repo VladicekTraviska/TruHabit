@@ -31,6 +31,8 @@ See [Development](docs/DEVELOPMENT.md) for verification, existing Linux setup, r
 
 React and TypeScript provide the UI. A Rust/Axum API manages accounts, permissions and workflows in PostgreSQL. Rust parses GPX/FIT, checks distance and time, compares available GPS/heart-rate/cadence signals and prevents the same qualifying recording from being credited repeatedly. Suspicious evidence can require an authorized human review.
 
+The responsive interface uses a shared forest/lime design system. Plus Jakarta Sans is served locally for offline use; its SIL Open Font License is included in `web/public/fonts/OFL.txt`.
+
 The personal Devnet path adds a Node.js worker and an Anchor program. The stake is held in a program-controlled SPL token account. The trusted oracle authorizes success/failure settlement; cancellation and emergency timeout have separate contract conditions. The API persists signed commands before broadcast and verifies finalized transaction/account observations before recording a transfer as complete. Health data stays off-chain.
 
 The expandable **Live process** panel displays actual observed API requests, evidence checks and blockchain operations. HTTP success alone is not proof of a finalized transfer. B2B rewards are local PostgreSQL transactions in a separate simulated point ledger. Activity Points, voluntary Events, Employer Match and a declining Monthly Budget are available; existing LOCAL team programs retain their original accounting.

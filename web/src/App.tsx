@@ -74,7 +74,14 @@ export function App() {
   useEffect(() => { if (previousPage.current !== page && session) { main.current?.focus(); window.scrollTo({ top: 0, behavior: 'instant' }); } previousPage.current = page; }, [page, session]);
   function navigate(next: Page) { const url = new URL(location.href); url.searchParams.set('view', next); history.pushState(null, '', url.pathname + url.search); setPage(next); }
   function openPage(e: MouseEvent<HTMLAnchorElement>, next: Page) { if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); navigate(next); }
-  function signedOut() { loadGeneration.current++; currentSession.current = null; setCsrf(''); resetProcessSession(); if (!mounted.current) return; setSession(null); setPage('prototype'); }
+  function signedOut() {
+    loadGeneration.current++; currentSession.current = null; setCsrf(''); resetProcessSession();
+    if (!mounted.current) return;
+    const url = new URL(location.href);
+    url.searchParams.set('view', 'prototype');
+    history.replaceState(null, '', url.pathname + url.search);
+    setSession(null); setPage('prototype');
+  }
   async function profileReset(userId: string, csrfToken: string) {
     if (!mounted.current || currentSession.current?.user.id !== userId || currentSession.current?.csrf_token !== csrfToken) return;
     resetProcessSession();
@@ -109,10 +116,11 @@ export function App() {
   const sessionEnded = () => {
     if (session && mounted.current && currentSession.current?.user.id === session.user.id && currentSession.current.csrf_token === session.csrf_token) signedOut();
   };
-  return <div className={signedIn ? 'app-shell' : 'welcome-shell'}>
+  return <div className={signedIn ? `app-shell app-view-${page}` : 'welcome-shell'}>
     <a className="skip-link" href="#main">{t('Přejít k obsahu')}</a>
     {signedIn && <aside className="app-sidebar"><Brand /><p className="sidebar-label">{p('YOUR SPACE', 'VÁŠ PROSTOR')}</p>
       <nav className="app-navigation" aria-label={t('Hlavní navigace')}>{pages.map(item => <a href={`/?view=${item.id}`} key={item.id} aria-current={page === item.id ? 'page' : undefined} onClick={e => openPage(e, item.id)}><item.icon size={22} weight={page === item.id ? 'duotone' : 'regular'} aria-hidden="true" /><span>{item.label}</span>{page === item.id && <span className="nav-indicator" aria-hidden="true" />}</a>)}</nav>
+      <ProcessConsole />
       <div className="sidebar-bottom"><div className="sidebar-promise"><ShieldCheck size={24} weight="duotone" aria-hidden="true" /><strong>{p('Small steps. Kept promises.', 'Malé kroky. Splněné sliby.')}</strong><p>{p('Your pace. Your commitment.', 'Vaše tempo. Váš závazek.')}</p></div><button className="sidebar-user" onClick={() => navigate('account')}><span className="avatar">{session.user.display_name.slice(0, 1).toUpperCase()}</span><span><strong>{session.user.display_name}</strong><small>{p('Personal account', 'Osobní účet')}</small></span><CaretRight size={16} aria-hidden="true" /></button></div>
     </aside>}
     <div className="app-content">
@@ -126,6 +134,5 @@ export function App() {
       </main>
       <footer className="wrap footer"><span translate="no">TruHabit <span className="muted">/</span><span translate="yes">{t('Důvěra začíná jasnými pravidly.')}</span></span><span>{t('Vaše cíle. Vaše tempo.')}</span></footer>
     </div>
-    {signedIn && <ProcessConsole />}
   </div>;
 }

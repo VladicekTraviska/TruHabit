@@ -1,17 +1,27 @@
-.stake-dialog { border:1px solid var(--line); border-radius:20px; color:var(--ink); background:#fff; width:min(600px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; overscroll-behavior:contain; padding:28px; box-shadow:0 24px 80px #153b2933; }
-.stake-dialog::backdrop { background:#15332780; backdrop-filter:blur(3px); }
-.stake-dialog-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:22px; color:var(--green); }
-.stake-dialog-header>span { display:flex; gap:10px; align-items:center; font-size:14px; font-weight:600; }
-.stake-dialog-header>button { display:grid; place-items:center; min-width:44px; min-height:44px; border:1px solid var(--line); border-radius:10px; background:white; color:var(--ink); }
-.stake-dialog-header>button:hover { background:var(--pale); }
-.stake-dialog h2 { font-size:27px; margin:0 0 9px; }
-.stake-dialog p { font-size:15px; line-height:1.65; margin:18px 0; }
-.stake-dialog .stake-dialog-challenge { margin-top:0; color:var(--muted); overflow-wrap:anywhere; }
-.stake-dialog-transfer { padding:20px; background:var(--pale); border:1px solid var(--line); border-radius:14px; display:grid; grid-template-columns:minmax(0,1fr) 24px minmax(0,1.35fr); gap:15px; align-items:center; }
-.stake-dialog-transfer>span { font-size:14px; }
-.stake-dialog-transfer strong { font-size:24px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-.stake-dialog-transfer small { display:block; font-size:13px; font-weight:400; margin-top:5px; line-height:1.5; }
-.stake-dialog .stake-dialog-environment { display:flex; gap:10px; align-items:flex-start; padding:15px; background:#f6f8f5; border-radius:12px; font-size:14px; }
-.stake-dialog-environment svg { flex-shrink:0; margin-top:2px; }
-.stake-dialog-actions { display:flex; justify-content:flex-end; gap:12px; flex-wrap:wrap; padding-top:10px; }
-@media(max-width:600px) { .stake-dialog { padding:20px; }.stake-dialog h2 { font-size:23px; }.stake-dialog-transfer { gap:10px; padding:16px; }.stake-dialog-transfer strong { font-size:21px; }.stake-dialog-actions>.button { flex:1; } }
+.stake-dialog{width:min(610px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;border:1px solid #ccd5c5;border-radius:18px;color:var(--ink);background:#fff;padding:30px;box-shadow:0 25px 85px #123b3238}
+.stake-dialog::backdrop{background:#123b326f;backdrop-filter:blur(4px)}
+.stake-dialog-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:25px;color:var(--green)}
+.stake-dialog-header>span{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:650}
+.stake-dialog-header>button{display:grid;place-items:center;min-width:44px;min-height:44px;padding:0;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--muted)}
+.stake-dialog-header>button:hover{background:var(--pale);color:var(--green)}
+.stake-dialog h2{font-size:31px;font-weight:720;line-height:1.15;letter-spacing:-.035em;margin:0 0 11px}
+.stake-dialog p{font-size:14px;line-height:1.8;margin:21px 0}
+.stake-dialog .stake-dialog-challenge{margin-top:0;color:var(--muted);font-size:15px;overflow-wrap:anywhere}
+.stake-dialog-transfer{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1.35fr);gap:17px;align-items:center;padding:24px 21px;border-radius:12px;background:var(--green);color:#fff}
+.stake-dialog-transfer>span{font-size:14px;line-height:1.65;color:#d8e5d8}
+.stake-dialog-transfer>svg{color:var(--lime)}
+.stake-dialog-transfer strong{font-size:29px;line-height:1.2;font-weight:700;letter-spacing:-.035em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stake-dialog-transfer small{display:block;color:#d8e5d8;font-size:13px;font-weight:450;letter-spacing:0;line-height:1.65;margin-top:8px}
+.stake-dialog .stake-dialog-environment{display:flex;align-items:flex-start;gap:11px;padding:16px;background:var(--pale);border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.75;color:#4c6352}
+.stake-dialog-environment svg{flex-shrink:0;margin-top:3px}
+.stake-dialog-actions{display:flex;justify-content:flex-end;gap:11px;flex-wrap:wrap;padding-top:5px}
+.stake-dialog-actions>.button{min-height:46px;font-size:14px;white-space:normal}
+@media(max-width:600px){
+  .stake-dialog{padding:24px 20px;border-radius:15px}
+  .stake-dialog h2{font-size:28px}
+  .stake-dialog-transfer{gap:11px;padding:20px 16px}
+  .stake-dialog-transfer strong{font-size:25px}
+  .stake-dialog-transfer>span{font-size:13px}
+  .stake-dialog-actions{flex-direction:column-reverse}
+  .stake-dialog-actions>.button{width:100%;justify-content:center}
+}

@@ -7,6 +7,7 @@ import type { Goal, GoalEvent, GoalInput, GoalPage, Session, Readiness } from '.
 import { Message, Field } from './components';
 import { Target, ArrowRight, CalendarBlank, Timer, Plus, PencilSimple, Archive, CaretDown, ShieldCheck, Check, WarningCircle } from '@phosphor-icons/react';
 import './sections-ui.css';
+import './goals-ui.css';
 
 type Pending = { key: string; body: GoalInput };
 export function Goals({
@@ -169,7 +170,7 @@ export function Goals({
   const visible = goals.filter((g) => g.state === filter);
   const disabled = busy || pending !== null;
   return (
-    <div className="goals-page sections-page">
+    <div className={'goals-page sections-page'+(!visible.length?' goals-empty':'')+(creating||editing?' goal-editing':'')}>
       <section className="product-heading">
         <div>
           <p className="eyebrow">{t("JEDEN KROK PO DRUHÉM")}</p>

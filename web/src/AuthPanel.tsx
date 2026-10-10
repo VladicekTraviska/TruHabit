@@ -1,10 +1,11 @@
-import { locale, t } from './i18n';
+import { getLanguage, locale, t } from './i18n';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError, isAuthRetryBlocked, type AuthCooldown } from './api';
 import { Field, PasswordField, Message } from './components';
-import { ArrowRight, ShieldCheck } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowRight, ShieldCheck, Target, Sneaker, CheckCircle } from '@phosphor-icons/react';
 import './sections-ui.css';
+import './auth-account.css';
 
 export interface ActionLink {
   purpose: 'verify_email' | 'reset_password';
@@ -32,6 +33,7 @@ export function AuthPanel({
   onDismissLink: () => void;
   emailAvailable: boolean;
 }) {
+  const p = (en: string, cs: string) => getLanguage() === 'en' ? en : cs;
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -124,44 +126,35 @@ export function AuthPanel({
         : t("Vítejte zpátky.");
   return (
     <div className="auth-layout sections-auth">
-      <section className="auth-story">
+      <section className="auth-story" aria-labelledby="auth-story-title">
         <p className="eyebrow">{t("PROSTOR PRO VAŠE CÍLE")}</p>
-        <h1>{t("Držte slovo.")} <br />
+        <h1 id="auth-story-title">{t("Držte slovo.")} <br />
           <span>{t("Hlavně sobě.")}</span>
         </h1>
-        <p>{t("Naplánujte si běh, vyberte dosažitelnou vzdálenost a dejte svému cíli konkrétní termín.")} </p>
+        <p className="auth-story-lead">{p('Set your goal. Record your run. Keep your commitment.', 'Stanovte si cíl. Zaznamenejte běh. Dodržte svůj slib.')}</p>
         <div className="auth-track" aria-hidden="true">
-          <svg viewBox="0 0 520 240" fill="none">
-            <path className="track-lane" d="M-35 190h282c76 0 76-140 0-140H80c-70 0-70 120 0 120h440" />
-            <path className="track-lane" d="M-35 208h282c100 0 100-176 0-176H80c-94 0-94 156 0 156h440" />
-            <path className="track-lane" d="M-35 226h282c124 0 124-212 0-212H80c-118 0-118 192 0 192h440" />
-            <path className="track-progress" d="M-35 190h282c76 0 76-140 0-140H170" />
-            <circle cx="170" cy="50" r="12" fill="#164b3b" stroke="#edf4ef" strokeWidth="5" />
+          <svg viewBox="0 0 650 400" fill="none" preserveAspectRatio="xMidYMax slice">
+            <path className="track-lane" d="M-30 252C190 220 530 170 550 117S470 75 705 25" />
+            <path className="track-lane" d="M-30 290C175 251 580 196 592 133S488 77 705 40" />
+            <path className="track-lane" d="M15 455C-20 296 624 238 628 158S506 89 705 54" />
+            <path className="track-lane" d="M91 455C48 317 652 265 663 183S524 100 705 67" />
+            <path className="track-lane" d="M180 455C118 340 680 299 699 210S544 112 705 80" />
+            <path className="track-progress" d="M91 455C69 382 225 331 367 297" />
+            <circle className="track-halo" cx="367" cy="297" r="28" />
+            <circle className="track-dot" cx="367" cy="297" r="10" />
           </svg>
-          <span className="track-caption">{t('Vaše vlastní tempo')}</span>
         </div>
-        <div className="auth-points">
-          <div>
-            <span>01</span>
-            <strong>{t("Vaše vlastní tempo")}</strong>
-            <p>{t("Jeden běh. Jeden cíl. Bez zbytečného závodění.")}</p>
-          </div>
-          <div>
-            <span>02</span>
-            <strong>{t("Jasná pravidla")}</strong>
-            <p>{t("U každého cíle vidíte termín, stav a historii změn.")}</p>
-          </div>
-          <div>
-            <span>03</span>
-            <strong>{t("Účet pod vaší kontrolou")}</strong>
-            <p>{t("Spravujte své údaje, peněženku i přihlášená zařízení.")}</p>
-          </div>
-        </div>
-        <p className="auth-availability">{t("Prototyp používá pouze testovací prostředky. Běh můžete doložit souborem GPX nebo FIT. Skutečné platby nejsou zapnuté.")} </p>
+        <ol className="auth-points">
+          <li><span className="auth-step-number">01</span><Target size={25} aria-hidden="true" /><div><strong>{p('Choose your goal', 'Vyberte si cíl')}</strong><p>{p('An achievable distance. A clear deadline.', 'Dosažitelná vzdálenost. Jasný termín.')}</p></div></li>
+          <li><span className="auth-step-number">02</span><Sneaker size={25} aria-hidden="true" /><div><strong>{p('Record your activity', 'Zaznamenejte aktivitu')}</strong><p>{p('Submit a GPX or FIT file from your run.', 'Doložte běh souborem GPX nebo FIT.')}</p></div></li>
+          <li><span className="auth-step-number">03</span><CheckCircle size={25} aria-hidden="true" /><div><strong>{p('See the outcome', 'Uvidíte výsledek')}</strong><p>{p('Check your progress, result and recorded history.', 'Sledujte průběh, výsledek i uloženou historii.')}</p></div></li>
+        </ol>
+        <div className="auth-availability"><ShieldCheck size={19} aria-hidden="true" /><p>{t("Prototyp používá pouze testovací prostředky. Běh můžete doložit souborem GPX nebo FIT. Skutečné platby nejsou zapnuté.")}</p></div>
       </section>
       <section className="panel auth-card" aria-labelledby="auth-title" aria-busy={busy}>
         <p className="eyebrow">{t("TRUHABIT ÚČET")}</p>
         <h2 id="auth-title">{title}</h2>
+        <p className="auth-form-intro">{link ? link.purpose === 'verify_email' ? p('One last step to confirm your email address.', 'Poslední krok k potvrzení e-mailové adresy.') : p('Choose a new password for your account.', 'Zvolte nové heslo ke svému účtu.') : mode === 'register' ? p('Your goals and running records, in one private space.', 'Vaše cíle a běžecké záznamy na jednom soukromém místě.') : mode === 'forgot' ? emailAvailable ? p('We will send a recovery link to your email.', 'Na e-mail vám pošleme odkaz na obnovu přístupu.') : p('Email recovery is not enabled on this installation.', 'Obnova e-mailem není v této instalaci zapnutá.') : p('Sign in to your TruHabit account.', 'Přihlaste se ke svému účtu TruHabit.')}</p>
         {!link && mode !== 'forgot' && <div className="auth-mode-switch" aria-label={t('TRUHABIT ÚČET')}>
           <button type="button" aria-pressed={mode === 'login'} disabled={busy} onClick={() => { setMode('login'); setError(''); setMessage(''); }}>{t('Přihlásit se')}</button>
           <button type="button" aria-pressed={mode === 'register'} disabled={busy} onClick={() => { setMode('register'); setError(''); setMessage(''); }}>{t('Vytvořit účet')}</button>
@@ -169,7 +162,7 @@ export function AuthPanel({
         {error && <Message error>{error}{accountExists && mode === 'register' && <button type="button" className="button secondary" disabled={busy} onClick={() => { setMode('login'); setMessage(error); setError(''); }}>{t('Přihlásit se')}</button>}</Message>}
         {message && <Message>{message}</Message>}
         {retryBlocked && cooldown && <p className="field-hint" role="status">{t('Další pokus je možný od')} {new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(cooldown.until)}.</p>}
-        <form onSubmit={submit} key={`${mode}-${link?.purpose ?? ''}`}>
+        <form className="auth-form" onSubmit={submit} key={`${mode}-${link?.purpose ?? ''}`}>
           <fieldset disabled={busy}>
             {link?.purpose === 'verify_email' ? (
               <p className="body-copy">{t("Potvrzením prokážete, že máte k této e-mailové adrese přístup.")} </p>
@@ -225,41 +218,30 @@ export function AuthPanel({
         {!link && (
           <div className="auth-links">
             {mode === 'login' ? (
-              <>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    setMode('register');
-                    setError('');
-                    setMessage('');
-                  }}
-                >{t("Ještě nemáte účet?")} <strong>{t("Zaregistrovat se")}</strong>
-                </button>
-                <button
+                <button type="button"
                   disabled={busy}
                   onClick={() => {
                     setMode('forgot');
                     setError('');
                     setMessage('');
                   }}
-                >{t("Zapomenuté heslo")} </button>
-              </>
+                >{t("Zapomenuté heslo")}</button>
             ) : (
-              <button
+              <button type="button"
                 disabled={busy}
                 onClick={() => {
                   setMode('login');
                   setError('');
                   setMessage('');
                 }}
-              >{t("Zpět na přihlášení")} </button>
+              ><ArrowLeft size={16} aria-hidden="true" />{t("Zpět na přihlášení")}</button>
             )}
           </div>
         )}
         {!emailAvailable && mode === 'forgot' && (
           <p className="field-hint">{t("Odesílání e-mailů zatím není dostupné. Pokud jste přihlášení na jiném zařízení, můžete heslo změnit v nastavení.")} </p>
         )}
-        <div className="auth-card-footnote"><ShieldCheck size={17} aria-hidden="true" /><span>{t('Test environment')}</span></div>
+        <div className="auth-card-footnote"><ShieldCheck size={17} aria-hidden="true" /><span>{p('Test funds only. Real payments are disabled.', 'Jen testovací prostředky. Skutečné platby nejsou zapnuté.')}</span></div>
       </section>
     </div>
   );
